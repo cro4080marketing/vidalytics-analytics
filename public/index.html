@@ -1145,11 +1145,13 @@ function renderDetail(data) {
     ${a.significantDrops.length > 0 ? `
     <div class="drops-section">
       <h3>Significant Drop-off Points</h3>
+      <div style="color:#888;font-size:12px;margin-bottom:10px;">Drops across full video timeline — relative % shows how many current viewers left at each point</div>
       ${a.significantDrops.map(d => `
         <div class="drop-item">
           <div class="drop-time">${d.formattedTime}</div>
+          <span class="badge badge-${d.severity || 'average'}" style="font-size:10px;padding:2px 6px;margin-right:6px;">${(d.segment || 'early').replace('-', ' ')}</span>
           <div class="drop-detail">${d.viewersBefore} → ${d.viewersAfter} viewers</div>
-          <div class="drop-pct">-${d.dropPercentage}%</div>
+          <div class="drop-pct" title="Relative: ${d.relativeDrop || d.dropPercentage}% of current viewers">-${d.relativeDrop || d.dropPercentage}% rel</div>
         </div>
       `).join('')}
     </div>` : ''}
@@ -1263,7 +1265,7 @@ function renderAIAnalysis(data, container) {
       ${a.timestampAnalysis.length > 0 ? `
       <div class="timestamp-section">
         <h3>Drop-off Content Analysis</h3>
-        <p style="color:#888;font-size:13px;margin-bottom:12px;">What's happening in the video at each major drop-off point</p>
+        <p style="color:#888;font-size:13px;margin-bottom:12px;">What's happening in the video at every major drop-off point across the full timeline</p>
         ${a.timestampAnalysis.map(ts => `
           <div class="ts-card">
             <div class="ts-time">${esc(ts.formattedTime || ts.timestamp)}</div>

@@ -223,12 +223,33 @@ function buildPrompt(
   drops: SignificantDrop[],
   videoContext?: string
 ): string {
-  const dropsList = drops
-    .map(
-      (d) =>
-        `- At ${d.formattedTime}: ${d.dropPercentage}% of viewers left (${d.viewersBefore} -> ${d.viewersAfter} viewers, severity: ${d.severity})`
-    )
-    .join("\n");
+  // Group drops by segment for clear timeline presentation
+  const segmentLabels: Record<string, string> = {
+    early: "EARLY VIDEO (first 25%)",
+    "mid-early": "MID-EARLY VIDEO (25-50%)",
+    "mid-late": "MID-LATE VIDEO (50-75%)",
+    late: "LATE VIDEO (75-100%)",
+  };
+  const segmentOrder = ["early", "mid-early", "mid-late", "late"];
+  const grouped: Record<string, typeof drops> = {};
+  for (const d of drops) {
+    const seg = d.segment || "early";
+    if (!grouped[seg]) grouped[seg] = [];
+    grouped[seg].push(d);
+  }
+  const dropsList = segmentOrder
+    .filter((seg) => grouped[seg]?.length)
+    .map((seg) => {
+      const label = segmentLabels[seg];
+      const items = grouped[seg]
+        .map(
+          (d) =>
+            `  - At ${d.formattedTime}: ${d.relativeDrop}% of current viewers left (${d.viewersBefore} -> ${d.viewersAfter} viewers, ${d.dropPercentage}% of total, severity: ${d.severity})`
+        )
+        .join("\n");
+      return `### ${label}\n${items}`;
+    })
+    .join("\n\n");
 
   const contextBlock = videoContext
     ? `\n## VIDEO CONTEXT (provided by the user)\n${videoContext}\n\nUse this context to tailor your analysis. For example, if this is a post-purchase upsell, evaluate the offer differently than a cold-traffic VSL. If a specific audience or product is mentioned, factor that into your feedback.\n`
@@ -248,12 +269,15 @@ ${contextBlock}
 - Revenue: $${stats.revenue.toFixed(2)}
 - Revenue Per Viewer: $${stats.revenuePerViewer.toFixed(2)}
 
-## SIGNIFICANT DROP-OFF POINTS
+## SIGNIFICANT DROP-OFF POINTS (across entire video timeline)
+
+The drop-offs below are grouped by video segment and show RELATIVE severity (percentage of viewers at that point who left). Later drops are often MORE actionable than early ones — viewers who stayed 10+ minutes were highly engaged, so something specific drove them away.
+
 ${dropsList || "No significant drop-offs detected."}
 
 ## YOUR TASK
 
-Watch this entire video carefully. Pay special attention to the timestamps where drop-offs occur. Analyze the video from the perspective of 5 expert direct response marketers:
+Watch this ENTIRE video from start to finish. Analyze drop-offs across the FULL timeline — early, middle, AND late sections of the video. For each drop-off point, identify exactly what is being said and shown on screen at that moment AND in the 30 seconds leading up to it. Analyze from the perspective of 5 expert direct response marketers:
 
 ### EXPERT 1: Alex Hormozi
 Role: Offer Strategy & Scaling Expert
@@ -330,8 +354,10 @@ Respond with a JSON object containing these exact fields:
 }
 
 IMPORTANT:
-- For each drop-off point listed above, include a timestampAnalysis entry explaining what content at that moment is causing viewers to leave
-- Each expert should provide at least 2 specificFixes tied to actual timestamps in the video
+- Include a timestampAnalysis entry for EVERY drop-off point listed above across ALL segments (early, mid, and late video). Do NOT skip later drop-off points — they are often the most actionable.
+- Also include timestampAnalysis entries for any additional moments you observe where content quality dips or viewers would likely leave, even if not in the drop-off list.
+- For each timestampAnalysis entry, describe what is being said and shown BOTH at that exact moment AND in the 30 seconds leading up to it.
+- Each expert should provide at least 2 specificFixes tied to actual timestamps in the video, covering DIFFERENT parts of the video (not all in the first minute).
 - Each expert MUST include 2-3 unique CRO tests in their "croTests" array, specific to their domain of expertise. Hormozi focuses on offer tests, Georgi on copy tests, Brunson on funnel/story tests, Kennedy on sales psychology tests, Schwartz on awareness/messaging tests. Every test must be different — no duplicate ideas across experts.
 - Be direct and specific. No generic advice. Reference actual content, words, and visuals from the video.
 - All timestamps should be in M:SS format

@@ -128,9 +128,11 @@ export interface SignificantDrop {
   second: number;
   formattedTime: string;
   dropPercentage: number;
+  relativeDrop: number; // drop relative to current viewers (not total)
   viewersBefore: number;
   viewersAfter: number;
   severity: PerformanceRating;
+  segment: "early" | "mid-early" | "mid-late" | "late";
 }
 
 export interface VideoAnalysis {

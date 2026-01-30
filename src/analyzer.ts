@@ -87,44 +87,109 @@ export function findSignificantDrops(dropOff: DropOffData): SignificantDrop[] {
   const { points, totalViewers } = dropOff;
   if (points.length < 3) return [];
 
-  // Calculate the average drop per interval
-  const drops: Array<{ idx: number; drop: number }> = [];
-  for (let i = 1; i < points.length; i++) {
-    const drop = points[i - 1].viewers - points[i].viewers;
-    drops.push({ idx: i, drop });
+  const lastSecond = points[points.length - 1].second;
+  if (lastSecond <= 0) return [];
+
+  // Segment boundaries: 4 quartiles of the video timeline
+  const segmentBounds: Array<{
+    name: "early" | "mid-early" | "mid-late" | "late";
+    start: number;
+    end: number;
+  }> = [
+    { name: "early", start: 0, end: lastSecond * 0.25 },
+    { name: "mid-early", start: lastSecond * 0.25, end: lastSecond * 0.5 },
+    { name: "mid-late", start: lastSecond * 0.5, end: lastSecond * 0.75 },
+    { name: "late", start: lastSecond * 0.75, end: lastSecond + 1 },
+  ];
+
+  function getSegment(second: number): "early" | "mid-early" | "mid-late" | "late" {
+    for (const seg of segmentBounds) {
+      if (second >= seg.start && second < seg.end) return seg.name;
+    }
+    return "late";
   }
 
-  const avgDrop = drops.reduce((sum, d) => sum + d.drop, 0) / drops.length;
+  // Calculate all drops with RELATIVE severity (drop / viewers at that point)
+  const allDrops: Array<{
+    idx: number;
+    drop: number;
+    relativeDrop: number;
+    dropPct: number;
+    segment: "early" | "mid-early" | "mid-late" | "late";
+  }> = [];
 
-  // Flag drops that are > 2x the average
-  const significant: SignificantDrop[] = [];
-  for (const { idx, drop } of drops) {
-    if (drop > avgDrop * 2 && drop > 0) {
-      const before = points[idx - 1];
-      const after = points[idx];
-      const dropPct = totalViewers > 0 ? (drop / totalViewers) * 100 : 0;
+  for (let i = 1; i < points.length; i++) {
+    const drop = points[i - 1].viewers - points[i].viewers;
+    if (drop <= 0) continue;
+    const before = points[i - 1];
+    const after = points[i];
+    // Relative drop: percentage of current viewers lost (not total)
+    const relativeDrop = before.viewers > 0 ? (drop / before.viewers) * 100 : 0;
+    // Absolute drop: percentage of total viewers
+    const dropPct = totalViewers > 0 ? (drop / totalViewers) * 100 : 0;
 
+    allDrops.push({
+      idx: i,
+      drop,
+      relativeDrop,
+      dropPct,
+      segment: getSegment(after.second),
+    });
+  }
+
+  // Calculate average relative drop for threshold
+  const avgRelDrop = allDrops.length > 0
+    ? allDrops.reduce((sum, d) => sum + d.relativeDrop, 0) / allDrops.length
+    : 0;
+
+  // Filter to significant drops (> 1.5x average relative drop)
+  const significant = allDrops.filter(d => d.relativeDrop > avgRelDrop * 1.5);
+
+  // Group by segment and pick top drops from each
+  const bySegment: Record<string, typeof significant> = {
+    early: [], "mid-early": [], "mid-late": [], late: [],
+  };
+  for (const d of significant) {
+    bySegment[d.segment].push(d);
+  }
+
+  // Sort each segment by relative drop and pick top entries
+  // Early: max 3 (always the noisiest), others: max 3 each
+  const maxPerSegment: Record<string, number> = {
+    early: 3, "mid-early": 3, "mid-late": 3, late: 3,
+  };
+
+  const selected: SignificantDrop[] = [];
+
+  for (const [segName, segDrops] of Object.entries(bySegment)) {
+    segDrops.sort((a, b) => b.relativeDrop - a.relativeDrop);
+    const limit = maxPerSegment[segName] || 3;
+    for (const d of segDrops.slice(0, limit)) {
+      const before = points[d.idx - 1];
+      const after = points[d.idx];
+
+      // Severity based on relative drop (how significant relative to current viewers)
       let severity: PerformanceRating;
-      if (dropPct >= 10) severity = "critical";
-      else if (dropPct >= 5) severity = "poor";
-      else if (dropPct >= 3) severity = "average";
+      if (d.relativeDrop >= 20) severity = "critical";
+      else if (d.relativeDrop >= 12) severity = "poor";
+      else if (d.relativeDrop >= 7) severity = "average";
       else severity = "good";
 
-      significant.push({
+      selected.push({
         second: after.second,
         formattedTime: after.formattedTime,
-        dropPercentage: Math.round(dropPct * 10) / 10,
+        dropPercentage: Math.round(d.dropPct * 10) / 10,
+        relativeDrop: Math.round(d.relativeDrop * 10) / 10,
         viewersBefore: before.viewers,
         viewersAfter: after.viewers,
         severity,
+        segment: d.segment as "early" | "mid-early" | "mid-late" | "late",
       });
     }
   }
 
-  // Sort by drop percentage descending, return top 5
-  return significant
-    .sort((a, b) => b.dropPercentage - a.dropPercentage)
-    .slice(0, 5);
+  // Sort chronologically so the report reads in timeline order
+  return selected.sort((a, b) => a.second - b.second);
 }
 
 function generateRecommendations(
