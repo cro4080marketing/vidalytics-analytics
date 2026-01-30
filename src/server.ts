@@ -154,57 +154,92 @@ app.get("/api/ai-status", (_req, res) => {
   res.json({ available: true });
 });
 
-// Full AI content analysis for a video
+// Full AI content analysis for a video (SSE streaming with progress)
 app.get("/api/videos/:id/content-analysis", async (req, res) => {
   if (!gemini) {
     res.status(503).json({ error: "AI analysis not available. Add GEMINI_API_KEY to .env." });
     return;
   }
 
-  try {
-    const videoId = req.params.id;
-    const dateFrom = (req.query.from as string) || defaultDateFrom();
-    const dateTo = (req.query.to as string) || defaultDateTo();
+  // Check if client wants SSE (streaming progress)
+  const wantSSE = req.query.stream === "1";
 
-    // Get video info, stats, and drop-off data
-    const [videos, stats, dropOff] = await Promise.all([
-      client.listVideos(),
-      client.getVideoStats(videoId, dateFrom, dateTo),
-      client.getDropOff(videoId, dateFrom, dateTo),
-    ]);
-
-    const video = videos.find((v) => v.id === videoId);
-    if (!video) {
-      res.status(404).json({ error: "Video not found" });
-      return;
-    }
-
-    if (!video.videoUrl) {
-      res.status(400).json({ error: "No video URL available for this video" });
-      return;
-    }
-
-    // Find significant drops
-    const significantDrops = findSignificantDrops(dropOff);
-
-    // Run AI analysis
-    const result = await gemini.analyze(
-      videoId,
-      video.videoUrl,
-      video.title,
-      stats,
-      significantDrops
-    );
-
-    res.json({
-      analysis: result.analysis,
-      cached: result.cached,
-      cachedAt: result.cachedAt ?? null,
+  if (wantSSE) {
+    // SSE headers
+    res.writeHead(200, {
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache",
+      Connection: "keep-alive",
     });
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : String(err);
-    console.error(`[AI Analysis Error] ${msg}`);
-    res.status(500).json({ error: msg });
+
+    const sendEvent = (event: string, data: unknown) => {
+      res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+    };
+
+    const onProgress = (step: number, totalSteps: number, label: string, detail?: string) => {
+      sendEvent("progress", { step, totalSteps, label, detail: detail ?? "" });
+    };
+
+    try {
+      const videoId = req.params.id;
+      const dateFrom = (req.query.from as string) || defaultDateFrom();
+      const dateTo = (req.query.to as string) || defaultDateTo();
+
+      sendEvent("progress", { step: 0, totalSteps: 6, label: "Loading video data", detail: "Fetching stats and drop-off data..." });
+
+      const [videos, stats, dropOff] = await Promise.all([
+        client.listVideos(),
+        client.getVideoStats(videoId, dateFrom, dateTo),
+        client.getDropOff(videoId, dateFrom, dateTo),
+      ]);
+
+      const video = videos.find((v) => v.id === videoId);
+      if (!video) { sendEvent("error", { error: "Video not found" }); res.end(); return; }
+      if (!video.videoUrl) { sendEvent("error", { error: "No video URL available" }); res.end(); return; }
+
+      const significantDrops = findSignificantDrops(dropOff);
+
+      const result = await gemini.analyze(
+        videoId, video.videoUrl, video.title, stats, significantDrops, onProgress
+      );
+
+      sendEvent("complete", {
+        analysis: result.analysis,
+        cached: result.cached,
+        cachedAt: result.cachedAt ?? null,
+      });
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error(`[AI Analysis Error] ${msg}`);
+      sendEvent("error", { error: msg });
+    }
+    res.end();
+  } else {
+    // Standard JSON response (no progress)
+    try {
+      const videoId = req.params.id;
+      const dateFrom = (req.query.from as string) || defaultDateFrom();
+      const dateTo = (req.query.to as string) || defaultDateTo();
+
+      const [videos, stats, dropOff] = await Promise.all([
+        client.listVideos(),
+        client.getVideoStats(videoId, dateFrom, dateTo),
+        client.getDropOff(videoId, dateFrom, dateTo),
+      ]);
+
+      const video = videos.find((v) => v.id === videoId);
+      if (!video) { res.status(404).json({ error: "Video not found" }); return; }
+      if (!video.videoUrl) { res.status(400).json({ error: "No video URL available for this video" }); return; }
+
+      const significantDrops = findSignificantDrops(dropOff);
+      const result = await gemini.analyze(videoId, video.videoUrl, video.title, stats, significantDrops);
+
+      res.json({ analysis: result.analysis, cached: result.cached, cachedAt: result.cachedAt ?? null });
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error(`[AI Analysis Error] ${msg}`);
+      res.status(500).json({ error: msg });
+    }
   }
 });
 

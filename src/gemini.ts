@@ -18,6 +18,9 @@ import {
 
 const GEMINI_MODEL = "gemini-2.5-flash";
 
+/** Progress callback for streaming updates to clients */
+export type ProgressCallback = (step: number, totalSteps: number, label: string, detail?: string) => void;
+
 export class GeminiAnalyzer {
   private ai: GoogleGenAI;
 
@@ -30,35 +33,43 @@ export class GeminiAnalyzer {
     videoUrl: string,
     videoTitle: string,
     stats: VideoStats,
-    drops: SignificantDrop[]
+    drops: SignificantDrop[],
+    onProgress?: ProgressCallback
   ): Promise<{ analysis: ContentAnalysis; cached: boolean; cachedAt?: number }> {
+    const progress = onProgress ?? (() => {});
+
     // Check cache first
     const key = cacheKey(`ai-analysis-${videoId}`, {});
     const cached = readCacheWithMeta<ContentAnalysis>(key);
     if (cached) {
+      progress(6, 6, "Complete", "Loaded from cache");
       return { analysis: cached.data, cached: true, cachedAt: cached.timestamp };
     }
 
     console.log(`[Gemini] Starting AI analysis for "${videoTitle}" (${videoId})`);
     console.log(`[Gemini] Video URL: ${videoUrl}`);
 
+    progress(1, 6, "Downloading video", "Fetching from Vidalytics CDN...");
+
     // Build the analysis prompt
     const prompt = buildPrompt(videoTitle, stats, drops);
 
     // Upload the video to Gemini and analyze
-    const analysis = await this.analyzeWithVideo(videoId, videoUrl, prompt);
+    const analysis = await this.analyzeWithVideo(videoId, videoUrl, prompt, progress);
 
     // Cache for 7 days
     writeCache(key, analysis, AI_CACHE_TTL);
     console.log(`[Gemini] Analysis complete and cached for ${videoTitle}`);
 
+    progress(6, 6, "Complete", "Analysis ready");
     return { analysis, cached: false };
   }
 
   private async analyzeWithVideo(
     videoId: string,
     videoUrl: string,
-    prompt: string
+    prompt: string,
+    progress: ProgressCallback
   ): Promise<ContentAnalysis> {
     console.log(`[Gemini] Downloading video from Vidalytics CDN...`);
 
@@ -81,7 +92,9 @@ export class GeminiAnalyzer {
       const fileStream = fs.createWriteStream(tempFile);
       await pipeline(Readable.fromWeb(videoRes.body as import("node:stream/web").ReadableStream), fileStream);
       const fileSize = fs.statSync(tempFile).size;
-      console.log(`[Gemini] Downloaded ${(fileSize / 1024 / 1024).toFixed(1)}MB to temp file`);
+      const sizeMB = (fileSize / 1024 / 1024).toFixed(0);
+      console.log(`[Gemini] Downloaded ${sizeMB}MB to temp file`);
+      progress(2, 6, "Uploading to AI", `Downloaded ${sizeMB}MB, uploading to Gemini...`);
     } catch (err) {
       try { fs.unlinkSync(tempFile); } catch { /* cleanup */ }
       throw new Error(`Video download failed: ${err instanceof Error ? err.message : String(err)}`);
@@ -100,12 +113,14 @@ export class GeminiAnalyzer {
 
     const fileName = uploadResult.name!;
     console.log(`[Gemini] Upload complete: ${fileName}`);
+    progress(3, 6, "Processing video", "Gemini is ingesting the video...");
 
     // Wait for video processing
     let file = await this.ai.files.get({ name: fileName });
     let waitTime = 0;
     while (file.state === "PROCESSING") {
       console.log(`[Gemini] Video processing... (${waitTime}s elapsed)`);
+      progress(3, 6, "Processing video", `Gemini is ingesting the video... (${waitTime}s)`);
       await new Promise((r) => setTimeout(r, 5000));
       waitTime += 5;
       file = await this.ai.files.get({ name: fileName });
@@ -120,6 +135,7 @@ export class GeminiAnalyzer {
     }
 
     console.log(`[Gemini] Video ready. Sending analysis prompt...`);
+    progress(4, 6, "Analyzing content", "5 expert marketers are reviewing your video...");
 
     // Send to Gemini with the video
     const response = await this.ai.models.generateContent({
@@ -143,6 +159,8 @@ export class GeminiAnalyzer {
         temperature: 0.7,
       },
     });
+
+    progress(5, 6, "Building report", "Parsing expert feedback and CRO tests...");
 
     const text = response.text ?? "";
 

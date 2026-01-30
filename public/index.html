@@ -170,10 +170,36 @@ tr.selected { background: #1a2332; }
 .ai-cache-info { display: inline-block; margin-left: 12px; font-size: 12px; color: #888; }
 
 .ai-loading {
-  text-align: center; padding: 40px 20px; color: #888;
+  padding: 30px 20px; color: #888;
 }
 .ai-loading .spinner { border-top-color: #7c3aed; }
-.ai-progress { margin-top: 8px; font-size: 13px; }
+.ai-progress-wrap {
+  margin-top: 16px;
+}
+.ai-progress-bar {
+  width: 100%; height: 8px; background: #262626; border-radius: 4px; overflow: hidden;
+  margin-bottom: 12px;
+}
+.ai-progress-fill {
+  height: 100%; background: linear-gradient(90deg, #7c3aed, #3b82f6);
+  border-radius: 4px; transition: width 0.5s ease; width: 0%;
+}
+.ai-steps {
+  display: flex; justify-content: space-between; gap: 4px; margin-bottom: 14px;
+}
+.ai-step {
+  flex: 1; text-align: center; font-size: 11px; color: #555; padding: 6px 2px;
+  border-radius: 4px; transition: all 0.3s;
+}
+.ai-step.active { color: #c4b5fd; background: rgba(124,58,237,0.1); }
+.ai-step.done { color: #4ade80; }
+.ai-step-icon { font-size: 16px; display: block; margin-bottom: 2px; }
+.ai-progress-label {
+  font-size: 14px; color: #e5e5e5; font-weight: 500;
+}
+.ai-progress-detail {
+  font-size: 13px; color: #888; margin-top: 4px;
+}
 
 /* Expert Tabs */
 .expert-tabs {
@@ -376,30 +402,81 @@ async function loadAIStatus() {
   } catch { aiAvailable = false; }
 }
 
+const AI_STEPS = [
+  { icon: '📋', label: 'Load data' },
+  { icon: '📥', label: 'Download' },
+  { icon: '☁️', label: 'Upload' },
+  { icon: '🔄', label: 'Process' },
+  { icon: '🧠', label: 'Analyze' },
+  { icon: '📊', label: 'Report' },
+];
+
+function renderProgressBar(step, totalSteps, label, detail) {
+  const pct = Math.round((step / totalSteps) * 100);
+  return `
+    <div class="ai-loading">
+      <div class="ai-progress-wrap">
+        <div class="ai-progress-bar"><div class="ai-progress-fill" style="width:${pct}%"></div></div>
+        <div class="ai-steps">
+          ${AI_STEPS.map((s, i) => {
+            const cls = i < step ? 'done' : i === step ? 'active' : '';
+            const icon = i < step ? '✓' : s.icon;
+            return `<div class="ai-step ${cls}"><span class="ai-step-icon">${icon}</span>${s.label}</div>`;
+          }).join('')}
+        </div>
+        <div class="ai-progress-label">${esc(label)}</div>
+        <div class="ai-progress-detail">${esc(detail || '')}</div>
+      </div>
+    </div>`;
+}
+
 async function loadAIAnalysis(videoId) {
   const container = document.getElementById('ai-container');
   if (!container) return;
 
-  container.innerHTML = `
-    <div class="ai-loading">
-      <div class="spinner"></div>
-      <div>Analyzing video with AI...</div>
-      <div class="ai-progress">This may take 30-90 seconds while the video is processed</div>
-    </div>`;
+  // Show initial progress bar
+  container.innerHTML = renderProgressBar(0, 6, 'Starting analysis...', 'Connecting to server...');
 
   const from = document.getElementById('date-from').value;
   const to = document.getElementById('date-to').value;
 
   try {
-    const res = await fetch(`/api/videos/${videoId}/content-analysis?from=${from}&to=${to}`);
-    if (!res.ok) {
-      const errData = await res.json().catch(() => ({}));
-      throw new Error(errData.error || `Server error: ${res.status}`);
-    }
-    const data = await res.json();
-    if (data.error) throw new Error(data.error);
-    if (!data.analysis) throw new Error('No analysis data returned. The video may be too large for the server to process. Try a shorter video.');
-    renderAIAnalysis(data, container);
+    // Use SSE for real-time progress
+    const url = `/api/videos/${videoId}/content-analysis?from=${from}&to=${to}&stream=1`;
+    const eventSource = new EventSource(url);
+
+    await new Promise((resolve, reject) => {
+      eventSource.addEventListener('progress', (e) => {
+        const d = JSON.parse(e.data);
+        container.innerHTML = renderProgressBar(d.step, d.totalSteps, d.label, d.detail);
+      });
+
+      eventSource.addEventListener('complete', (e) => {
+        eventSource.close();
+        const data = JSON.parse(e.data);
+        if (!data.analysis) {
+          reject(new Error('No analysis data returned.'));
+          return;
+        }
+        renderAIAnalysis(data, container);
+        resolve();
+      });
+
+      eventSource.addEventListener('error', (e) => {
+        eventSource.close();
+        try {
+          const d = JSON.parse(e.data);
+          reject(new Error(d.error || 'Analysis failed'));
+        } catch {
+          reject(new Error('Connection lost. The video may be too large to process.'));
+        }
+      });
+
+      eventSource.onerror = () => {
+        eventSource.close();
+        reject(new Error('Connection lost. The server may have run out of memory processing this video.'));
+      };
+    });
   } catch (err) {
     container.innerHTML = `<div class="error-msg">AI Analysis Error: ${esc(err.message)}</div>`;
   }
