@@ -1,0 +1,774 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Vidalytics Analytics</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: #0a0a0a; color: #e5e5e5; line-height: 1.5;
+}
+.container { max-width: 1100px; margin: 0 auto; padding: 24px; }
+h1 { color: #fff; font-size: 24px; margin-bottom: 4px; }
+.subtitle { color: #888; font-size: 14px; margin-bottom: 24px; }
+.usage-bar { display: flex; align-items: center; gap: 8px; font-size: 12px; color: #888; }
+.usage-bar .bar { flex: 1; max-width: 120px; height: 6px; background: #262626; border-radius: 3px; overflow: hidden; }
+.usage-bar .bar-fill { height: 100%; background: #3b82f6; border-radius: 3px; transition: width 0.3s; }
+
+/* Controls */
+.controls {
+  display: flex; gap: 12px; align-items: center; margin-bottom: 24px; flex-wrap: wrap;
+}
+.controls input[type="date"] {
+  background: #141414; border: 1px solid #333; border-radius: 8px;
+  color: #e5e5e5; padding: 8px 12px; font-size: 14px;
+}
+.controls button {
+  background: #3b82f6; color: #fff; border: none; border-radius: 8px;
+  padding: 8px 20px; font-size: 14px; font-weight: 600; cursor: pointer;
+}
+.controls button:hover { background: #2563eb; }
+.controls button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* Cards */
+.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 24px; }
+.card {
+  background: #141414; border: 1px solid #262626; border-radius: 12px; padding: 20px;
+}
+.card-label { color: #888; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; }
+.card-value { color: #fff; font-size: 28px; font-weight: 700; margin-top: 4px; }
+.card-sub { color: #888; font-size: 12px; margin-top: 2px; }
+
+/* Alerts */
+.alerts { margin-bottom: 24px; }
+.alert {
+  padding: 14px 18px; border-radius: 8px; margin-bottom: 10px;
+  border-left: 4px solid; font-size: 14px;
+}
+.alert-critical { background: #2d1515; border-color: #f87171; color: #fca5a5; }
+.alert-warning { background: #2d2515; border-color: #fb923c; color: #fdba74; }
+.alert-positive { background: #152d15; border-color: #4ade80; color: #86efac; }
+.alert-title { font-weight: 600; margin-bottom: 2px; }
+.alert-action { color: #e5e5e5; margin-top: 4px; font-size: 13px; }
+
+/* Table */
+.table-wrap {
+  background: #141414; border: 1px solid #262626; border-radius: 12px;
+  overflow-x: auto; margin-bottom: 24px;
+}
+table { width: 100%; border-collapse: collapse; }
+th {
+  text-align: left; padding: 12px 16px; color: #888; font-size: 12px;
+  text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid #262626;
+  cursor: pointer; user-select: none; white-space: nowrap;
+}
+th:hover { color: #e5e5e5; }
+th .sort-arrow { margin-left: 4px; }
+td { padding: 12px 16px; border-bottom: 1px solid #1a1a1a; font-size: 14px; }
+tr:last-child td { border-bottom: none; }
+tr.clickable { cursor: pointer; }
+tr.clickable:hover { background: #1a1a1a; }
+tr.selected { background: #1a2332; }
+.video-name { color: #fff; font-weight: 500; max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Score badge */
+.badge { display: inline-block; padding: 3px 10px; border-radius: 6px; font-size: 12px; font-weight: 600; }
+.badge-excellent { background: rgba(34,197,94,0.15); color: #4ade80; }
+.badge-good { background: rgba(59,130,246,0.15); color: #60a5fa; }
+.badge-average { background: rgba(250,204,21,0.15); color: #facc15; }
+.badge-poor { background: rgba(251,146,60,0.15); color: #fb923c; }
+.badge-critical { background: rgba(248,113,113,0.15); color: #f87171; }
+
+/* Detail panel */
+#detail-panel {
+  background: #141414; border: 1px solid #262626; border-radius: 12px;
+  padding: 24px; margin-bottom: 24px; display: none;
+}
+#detail-panel.visible { display: block; }
+.detail-header { display: flex; align-items: center; gap: 16px; margin-bottom: 20px; flex-wrap: wrap; }
+.detail-title { color: #fff; font-size: 20px; font-weight: 600; }
+.detail-score { font-size: 32px; font-weight: 700; }
+
+/* Metrics grid */
+.metrics-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 24px; }
+.metric-card { background: #1a1a1a; border-radius: 8px; padding: 14px; }
+.metric-label { color: #888; font-size: 11px; text-transform: uppercase; }
+.metric-value { font-size: 22px; font-weight: 700; color: #fff; }
+.metric-rating { font-size: 11px; margin-top: 2px; }
+
+/* Engagement chart */
+.chart-section h3 { color: #fff; font-size: 16px; margin-bottom: 12px; }
+.chart-container {
+  position: relative; height: 200px; background: #1a1a1a;
+  border: 1px solid #262626; border-radius: 8px; overflow: hidden;
+  margin-bottom: 8px;
+}
+.chart-bars { display: flex; align-items: flex-end; height: 100%; padding: 0 2px; }
+.chart-bar {
+  flex: 1; min-width: 1px; background: rgba(59,130,246,0.5);
+  border-radius: 1px 1px 0 0; transition: background 0.15s; position: relative;
+}
+.chart-bar:hover { background: rgba(59,130,246,0.8); }
+.chart-bar.drop-bar { background: rgba(248,113,113,0.6); }
+.chart-bar.drop-bar:hover { background: rgba(248,113,113,0.9); }
+.chart-labels { display: flex; justify-content: space-between; font-size: 11px; color: #666; }
+.chart-tooltip {
+  position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%);
+  background: #333; color: #fff; padding: 4px 8px; border-radius: 4px;
+  font-size: 11px; white-space: nowrap; pointer-events: none; display: none; z-index: 10;
+}
+.chart-bar:hover .chart-tooltip { display: block; }
+
+/* Drop-offs list */
+.drops-section { margin-bottom: 24px; }
+.drops-section h3 { color: #fff; font-size: 16px; margin-bottom: 12px; }
+.drop-item {
+  display: flex; align-items: center; gap: 12px; padding: 10px 14px;
+  background: #1a1a1a; border-radius: 8px; margin-bottom: 8px;
+}
+.drop-time { color: #f87171; font-weight: 700; font-size: 16px; min-width: 50px; }
+.drop-detail { flex: 1; font-size: 13px; }
+.drop-pct { color: #f87171; font-weight: 600; font-size: 14px; }
+
+/* Recommendations */
+.recs-section h3 { color: #fff; font-size: 16px; margin-bottom: 12px; }
+.rec-card {
+  padding: 16px; border-radius: 8px; margin-bottom: 10px; border-left: 4px solid;
+}
+.rec-critical { background: #2d1515; border-color: #f87171; }
+.rec-warning { background: #2d2515; border-color: #fb923c; }
+.rec-suggestion { background: #152d2d; border-color: #60a5fa; }
+.rec-positive { background: #152d15; border-color: #4ade80; }
+.rec-title { font-weight: 600; font-size: 14px; color: #fff; margin-bottom: 4px; }
+.rec-detail { font-size: 13px; color: #ccc; margin-bottom: 6px; }
+.rec-action { font-size: 13px; color: #3b82f6; }
+
+/* AI Analysis Section */
+.ai-section {
+  margin-top: 24px; border-top: 1px solid #262626; padding-top: 24px;
+}
+.ai-btn {
+  background: linear-gradient(135deg, #7c3aed, #3b82f6); color: #fff; border: none;
+  border-radius: 8px; padding: 10px 24px; font-size: 14px; font-weight: 600;
+  cursor: pointer; display: inline-flex; align-items: center; gap: 8px;
+}
+.ai-btn:hover { opacity: 0.9; }
+.ai-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.ai-cache-info { display: inline-block; margin-left: 12px; font-size: 12px; color: #888; }
+
+.ai-loading {
+  text-align: center; padding: 40px 20px; color: #888;
+}
+.ai-loading .spinner { border-top-color: #7c3aed; }
+.ai-progress { margin-top: 8px; font-size: 13px; }
+
+/* Expert Tabs */
+.expert-tabs {
+  display: flex; gap: 4px; margin-bottom: 16px; flex-wrap: wrap;
+}
+.expert-tab {
+  background: #1a1a1a; border: 1px solid #333; border-radius: 8px 8px 0 0;
+  padding: 8px 16px; font-size: 13px; color: #888; cursor: pointer;
+  border-bottom: 2px solid transparent; transition: all 0.2s;
+}
+.expert-tab:hover { color: #e5e5e5; background: #222; }
+.expert-tab.active {
+  color: #fff; background: #1a1a1a; border-color: #7c3aed;
+  border-bottom-color: #7c3aed;
+}
+.expert-panel {
+  background: #1a1a1a; border: 1px solid #333; border-radius: 0 8px 8px 8px;
+  padding: 20px; display: none;
+}
+.expert-panel.active { display: block; }
+
+.expert-header { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+.expert-name { color: #fff; font-size: 18px; font-weight: 600; }
+.expert-role { color: #7c3aed; font-size: 13px; }
+.expert-assessment { color: #ccc; font-size: 14px; margin-bottom: 16px; line-height: 1.6; }
+
+.expert-strengths, .expert-weaknesses {
+  margin-bottom: 16px;
+}
+.expert-strengths h4 { color: #4ade80; font-size: 13px; margin-bottom: 6px; }
+.expert-weaknesses h4 { color: #f87171; font-size: 13px; margin-bottom: 6px; }
+.expert-list { list-style: none; padding: 0; }
+.expert-list li {
+  padding: 6px 0 6px 20px; position: relative; font-size: 13px; color: #ccc;
+}
+.expert-list li::before {
+  content: ''; position: absolute; left: 0; top: 12px;
+  width: 8px; height: 8px; border-radius: 50%;
+}
+.expert-strengths .expert-list li::before { background: #4ade80; }
+.expert-weaknesses .expert-list li::before { background: #f87171; }
+
+.expert-fixes { margin-bottom: 16px; }
+.expert-fixes h4 { color: #60a5fa; font-size: 13px; margin-bottom: 8px; }
+.fix-item {
+  background: #141414; border-radius: 6px; padding: 12px; margin-bottom: 8px;
+  border-left: 3px solid #60a5fa;
+}
+.fix-timestamp { color: #7c3aed; font-weight: 600; font-size: 12px; }
+.fix-issue { color: #fca5a5; font-size: 13px; margin-top: 4px; }
+.fix-solution { color: #86efac; font-size: 13px; margin-top: 4px; }
+
+.expert-priority {
+  background: linear-gradient(135deg, rgba(124,58,237,0.1), rgba(59,130,246,0.1));
+  border: 1px solid #7c3aed; border-radius: 8px; padding: 14px;
+}
+.expert-priority h4 { color: #7c3aed; font-size: 13px; margin-bottom: 4px; }
+.expert-priority p { color: #e5e5e5; font-size: 14px; }
+
+/* CRO Tests */
+.cro-section { margin-top: 24px; }
+.cro-section h3 { color: #fff; font-size: 16px; margin-bottom: 12px; }
+.cro-card {
+  background: #1a1a1a; border: 1px solid #333; border-radius: 8px;
+  padding: 16px; margin-bottom: 12px;
+}
+.cro-name { color: #fff; font-weight: 600; font-size: 14px; margin-bottom: 6px; }
+.cro-row { display: grid; grid-template-columns: 100px 1fr; gap: 4px; font-size: 13px; margin-bottom: 4px; }
+.cro-label { color: #7c3aed; font-weight: 500; }
+.cro-value { color: #ccc; }
+
+/* Timestamp Analysis */
+.timestamp-section { margin-top: 24px; }
+.timestamp-section h3 { color: #fff; font-size: 16px; margin-bottom: 12px; }
+.ts-card {
+  background: #1a1a1a; border: 1px solid #333; border-radius: 8px;
+  padding: 16px; margin-bottom: 10px; border-left: 4px solid #f87171;
+}
+.ts-time { color: #f87171; font-weight: 700; font-size: 16px; margin-bottom: 8px; }
+.ts-row { font-size: 13px; margin-bottom: 4px; }
+.ts-label { color: #888; font-weight: 500; }
+.ts-content { color: #ccc; }
+.ts-issue { color: #fca5a5; }
+.ts-fix { color: #86efac; }
+
+/* Script Structure */
+.script-section { margin-top: 24px; }
+.script-section h3 { color: #fff; font-size: 16px; margin-bottom: 12px; }
+.script-grid {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 12px; margin-bottom: 16px;
+}
+.script-card {
+  background: #1a1a1a; border: 1px solid #333; border-radius: 8px; padding: 14px;
+}
+.script-label {
+  color: #7c3aed; font-size: 11px; text-transform: uppercase;
+  letter-spacing: 0.5px; margin-bottom: 6px; font-weight: 600;
+}
+.script-text { color: #ccc; font-size: 13px; line-height: 1.5; }
+.script-flow {
+  background: #1a1a1a; border: 1px solid #333; border-radius: 8px; padding: 14px;
+}
+
+/* Verdict */
+.verdict-box {
+  background: linear-gradient(135deg, rgba(124,58,237,0.08), rgba(59,130,246,0.08));
+  border: 1px solid #7c3aed; border-radius: 12px; padding: 20px;
+  margin-top: 24px;
+}
+.verdict-title { color: #7c3aed; font-size: 14px; font-weight: 600; margin-bottom: 8px; }
+.verdict-text { color: #e5e5e5; font-size: 15px; line-height: 1.6; }
+
+/* Loading / Error */
+.loading { text-align: center; padding: 60px 20px; color: #888; }
+.spinner {
+  display: inline-block; width: 24px; height: 24px; border: 3px solid #333;
+  border-top-color: #3b82f6; border-radius: 50%;
+  animation: spin 0.7s linear infinite; margin-bottom: 12px;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+.error-msg {
+  background: #2d1515; border: 1px solid #7f1d1d; border-radius: 8px;
+  padding: 16px; color: #fca5a5; margin-bottom: 24px;
+}
+.hidden { display: none; }
+</style>
+</head>
+<body>
+<div class="container">
+  <div style="display:flex;justify-content:space-between;align-items:start;flex-wrap:wrap;gap:12px;margin-bottom:20px;">
+    <div>
+      <h1>Vidalytics Analytics</h1>
+      <div class="subtitle">Video performance analysis &amp; recommendations</div>
+    </div>
+    <div class="usage-bar" id="usage-bar">
+      <span id="usage-text">API: --</span>
+      <div class="bar"><div class="bar-fill" id="usage-fill" style="width:0%"></div></div>
+    </div>
+  </div>
+
+  <div class="controls">
+    <label style="color:#888;font-size:13px;">From</label>
+    <input type="date" id="date-from" />
+    <label style="color:#888;font-size:13px;">To</label>
+    <input type="date" id="date-to" />
+    <button id="btn-analyze" onclick="loadDashboard()">Analyze</button>
+  </div>
+
+  <div id="error-box" class="error-msg hidden"></div>
+  <div id="loading" class="loading hidden"><div class="spinner"></div><div>Loading video data...</div></div>
+
+  <div id="summary-cards" class="cards hidden"></div>
+  <div id="alerts" class="alerts hidden"></div>
+  <div id="video-table" class="table-wrap hidden"></div>
+  <div id="detail-panel"></div>
+</div>
+
+<script>
+// ── State ──
+let allVideos = [];
+let currentSort = { col: 'score', dir: 'desc' };
+let selectedVideoId = null;
+let aiAvailable = false;
+let activeExpertTab = 0;
+
+// ── Init ──
+(function init() {
+  const now = new Date();
+  const from = new Date(now);
+  from.setDate(from.getDate() - 30);
+  document.getElementById('date-from').value = fmt(from);
+  document.getElementById('date-to').value = fmt(now);
+  loadUsage();
+  loadAIStatus();
+  loadDashboard();
+})();
+
+function fmt(d) {
+  return d.toISOString().split('T')[0];
+}
+
+async function loadUsage() {
+  try {
+    const res = await fetch('/api/usage');
+    const u = await res.json();
+    const pct = u.monthlyLimit ? Math.round((u.currentUsage / u.monthlyLimit) * 100) : 0;
+    document.getElementById('usage-text').textContent = `API: ${u.currentUsage.toLocaleString()}/${(u.monthlyLimit||'∞').toLocaleString()}`;
+    document.getElementById('usage-fill').style.width = pct + '%';
+  } catch {}
+}
+
+async function loadAIStatus() {
+  try {
+    const res = await fetch('/api/ai-status');
+    const data = await res.json();
+    aiAvailable = data.available;
+  } catch { aiAvailable = false; }
+}
+
+async function loadAIAnalysis(videoId) {
+  const container = document.getElementById('ai-container');
+  if (!container) return;
+
+  container.innerHTML = `
+    <div class="ai-loading">
+      <div class="spinner"></div>
+      <div>Analyzing video with AI...</div>
+      <div class="ai-progress">This may take 30-90 seconds while the video is processed</div>
+    </div>`;
+
+  const from = document.getElementById('date-from').value;
+  const to = document.getElementById('date-to').value;
+
+  try {
+    const res = await fetch(`/api/videos/${videoId}/content-analysis?from=${from}&to=${to}`);
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+    renderAIAnalysis(data, container);
+  } catch (err) {
+    container.innerHTML = `<div class="error-msg">AI Analysis Error: ${esc(err.message)}</div>`;
+  }
+}
+
+async function loadDashboard() {
+  const from = document.getElementById('date-from').value;
+  const to = document.getElementById('date-to').value;
+  const btn = document.getElementById('btn-analyze');
+
+  show('loading'); hide('error-box'); hide('summary-cards'); hide('alerts'); hide('video-table');
+  document.getElementById('detail-panel').classList.remove('visible');
+  btn.disabled = true;
+
+  try {
+    const [videosRes, summaryRes] = await Promise.all([
+      fetch(`/api/videos?from=${from}&to=${to}`).then(r => r.json()),
+      fetch(`/api/summary?from=${from}&to=${to}`).then(r => r.json()),
+    ]);
+
+    if (videosRes.error) throw new Error(videosRes.error);
+    if (summaryRes.error) throw new Error(summaryRes.error);
+
+    allVideos = videosRes.videos;
+    renderSummary(summaryRes.summary);
+    renderAlerts(summaryRes.summary);
+    renderTable(allVideos);
+    show('summary-cards'); show('video-table');
+    if (summaryRes.summary.portfolioRecommendations.length > 0) show('alerts');
+  } catch (err) {
+    document.getElementById('error-box').textContent = err.message;
+    show('error-box');
+  } finally {
+    hide('loading');
+    btn.disabled = false;
+    loadUsage();
+  }
+}
+
+// ── Render Summary Cards ──
+function renderSummary(s) {
+  document.getElementById('summary-cards').innerHTML = `
+    <div class="card"><div class="card-label">Total Plays</div><div class="card-value">${s.totalPlays.toLocaleString()}</div><div class="card-sub">${s.totalVideos} videos</div></div>
+    <div class="card"><div class="card-label">Avg Engagement</div><div class="card-value">${(s.avgEngagement*100).toFixed(1)}%</div><div class="card-sub">of video watched</div></div>
+    <div class="card"><div class="card-label">Avg Play Rate</div><div class="card-value">${(s.avgPlayRate*100).toFixed(1)}%</div><div class="card-sub">visitors who press play</div></div>
+    <div class="card"><div class="card-label">Revenue</div><div class="card-value">$${s.totalRevenue.toFixed(2)}</div><div class="card-sub">${s.totalConversions} conversions</div></div>
+  `;
+}
+
+// ── Render Alerts ──
+function renderAlerts(s) {
+  const el = document.getElementById('alerts');
+  el.innerHTML = s.portfolioRecommendations.map(r => `
+    <div class="alert alert-${r.type}">
+      <div class="alert-title">${esc(r.title)}</div>
+      <div>${esc(r.detail)}</div>
+      <div class="alert-action">${esc(r.actionableStep)}</div>
+    </div>
+  `).join('');
+}
+
+// ── Render Video Table ──
+function renderTable(videos) {
+  const arrow = (col) => currentSort.col === col ? (currentSort.dir === 'asc' ? ' ↑' : ' ↓') : '';
+  document.getElementById('video-table').innerHTML = `<table>
+    <thead><tr>
+      <th onclick="sortBy('title')">Video${arrow('title')}</th>
+      <th onclick="sortBy('plays')">Plays${arrow('plays')}</th>
+      <th onclick="sortBy('engagement')">Engagement${arrow('engagement')}</th>
+      <th onclick="sortBy('playRate')">Play Rate${arrow('playRate')}</th>
+      <th onclick="sortBy('unmuteRate')">Unmute${arrow('unmuteRate')}</th>
+      <th onclick="sortBy('conversionRate')">Conv %${arrow('conversionRate')}</th>
+      <th onclick="sortBy('score')">Score${arrow('score')}</th>
+    </tr></thead>
+    <tbody>${videos.map(v => {
+      const s = v.stats;
+      const sel = v.id === selectedVideoId ? ' selected' : '';
+      return `<tr class="clickable${sel}" onclick="selectVideo('${v.id}')">
+        <td class="video-name" title="${esc(v.title)}">${esc(v.title)}</td>
+        <td>${s ? s.plays.toLocaleString() : '—'}</td>
+        <td>${s ? (s.engagement*100).toFixed(1)+'%' : '—'}</td>
+        <td>${s ? (s.playRate*100).toFixed(1)+'%' : '—'}</td>
+        <td>${s ? (s.unmuteRate*100).toFixed(1)+'%' : '—'}</td>
+        <td>${s ? (s.conversionRate*100).toFixed(2)+'%' : '—'}</td>
+        <td><span class="badge badge-${v.rating}">${v.score}</span></td>
+      </tr>`;
+    }).join('')}</tbody></table>`;
+}
+
+function sortBy(col) {
+  if (currentSort.col === col) {
+    currentSort.dir = currentSort.dir === 'asc' ? 'desc' : 'asc';
+  } else {
+    currentSort = { col, dir: col === 'title' ? 'asc' : 'desc' };
+  }
+  allVideos.sort((a, b) => {
+    let va, vb;
+    if (col === 'title') { va = a.title.toLowerCase(); vb = b.title.toLowerCase(); }
+    else if (col === 'score') { va = a.score; vb = b.score; }
+    else { va = a.stats?.[col] ?? 0; vb = b.stats?.[col] ?? 0; }
+    if (va < vb) return currentSort.dir === 'asc' ? -1 : 1;
+    if (va > vb) return currentSort.dir === 'asc' ? 1 : -1;
+    return 0;
+  });
+  renderTable(allVideos);
+}
+
+// ── Video Detail ──
+async function selectVideo(id) {
+  selectedVideoId = id;
+  renderTable(allVideos);
+  const panel = document.getElementById('detail-panel');
+  panel.classList.add('visible');
+  panel.innerHTML = '<div class="loading"><div class="spinner"></div><div>Loading analysis...</div></div>';
+
+  const from = document.getElementById('date-from').value;
+  const to = document.getElementById('date-to').value;
+
+  try {
+    const res = await fetch(`/api/videos/${id}/analysis?from=${from}&to=${to}`);
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+    renderDetail(data);
+  } catch (err) {
+    panel.innerHTML = `<div class="error-msg">${esc(err.message)}</div>`;
+  }
+}
+
+function renderDetail(data) {
+  const { analysis, dropOff, stats } = data;
+  const a = analysis;
+  const panel = document.getElementById('detail-panel');
+
+  panel.innerHTML = `
+    <div class="detail-header">
+      <div class="detail-score badge badge-${a.overallRating}">${a.overallScore}/100</div>
+      <div class="detail-title">${esc(a.videoName)}</div>
+    </div>
+
+    <div class="metrics-grid">
+      ${metricCard('Play Rate', a.metrics.playRate)}
+      ${metricCard('Engagement', a.metrics.engagement)}
+      ${metricCard('Conv Rate', a.metrics.conversionRate)}
+      ${metricCard('Unmute Rate', a.metrics.unmuteRate)}
+    </div>
+
+    <div class="chart-section">
+      <h3>Viewer Retention</h3>
+      ${renderChart(dropOff, a.significantDrops)}
+    </div>
+
+    ${a.significantDrops.length > 0 ? `
+    <div class="drops-section">
+      <h3>Significant Drop-off Points</h3>
+      ${a.significantDrops.map(d => `
+        <div class="drop-item">
+          <div class="drop-time">${d.formattedTime}</div>
+          <div class="drop-detail">${d.viewersBefore} → ${d.viewersAfter} viewers</div>
+          <div class="drop-pct">-${d.dropPercentage}%</div>
+        </div>
+      `).join('')}
+    </div>` : ''}
+
+    <div class="recs-section">
+      <h3>Recommendations</h3>
+      ${a.recommendations.map(r => `
+        <div class="rec-card rec-${r.type}">
+          <div class="rec-title">${esc(r.title)}</div>
+          <div class="rec-detail">${esc(r.detail)}</div>
+          <div class="rec-action">${esc(r.actionableStep)}</div>
+        </div>
+      `).join('')}
+    </div>
+
+    ${aiAvailable ? `
+    <div class="ai-section">
+      <h3 style="color:#fff;font-size:16px;margin-bottom:12px;">AI Content Analysis</h3>
+      <p style="color:#888;font-size:13px;margin-bottom:12px;">
+        Uses Google Gemini to watch your actual video, analyze the content at drop-off points, and provide expert feedback from 5 direct response marketing legends.
+      </p>
+      <button class="ai-btn" id="ai-analyze-btn" onclick="loadAIAnalysis('${a.videoId}')">
+        Analyze Video Content with AI
+      </button>
+      <div id="ai-container"></div>
+    </div>` : ''}
+  `;
+}
+
+function metricCard(label, m) {
+  const pct = m.value < 1 ? (m.value * 100).toFixed(1) + '%' : m.value.toFixed(1);
+  return `<div class="metric-card">
+    <div class="metric-label">${label}</div>
+    <div class="metric-value">${pct}</div>
+    <div class="metric-rating"><span class="badge badge-${m.rating}">${m.rating}</span></div>
+  </div>`;
+}
+
+function renderChart(dropOff, significantDrops) {
+  if (!dropOff || !dropOff.points || dropOff.points.length === 0) {
+    return '<div style="color:#888;padding:20px;text-align:center;">No drop-off data available</div>';
+  }
+  const pts = dropOff.points;
+  const max = dropOff.totalViewers || pts[0].viewers;
+  const dropSeconds = new Set(significantDrops.map(d => d.second));
+
+  const bars = pts.map(p => {
+    const h = max > 0 ? (p.viewers / max) * 100 : 0;
+    const isDrop = dropSeconds.has(p.second);
+    return `<div class="chart-bar${isDrop ? ' drop-bar' : ''}" style="height:${h}%">
+      <div class="chart-tooltip">${p.formattedTime} — ${p.percentRemaining.toFixed(0)}% (${p.viewers})</div>
+    </div>`;
+  }).join('');
+
+  const first = pts[0];
+  const mid = pts[Math.floor(pts.length / 2)];
+  const last = pts[pts.length - 1];
+
+  return `<div class="chart-container"><div class="chart-bars">${bars}</div></div>
+    <div class="chart-labels">
+      <span>${first.formattedTime}</span>
+      <span>${mid.formattedTime}</span>
+      <span>${last.formattedTime}</span>
+    </div>`;
+}
+
+// ── AI Analysis Rendering ──
+function renderAIAnalysis(data, container) {
+  const { analysis, cached, cachedAt } = data;
+  const a = analysis;
+  activeExpertTab = 0;
+
+  const cacheInfo = cached
+    ? `<span class="ai-cache-info">Cached ${timeAgo(cachedAt)}</span>`
+    : '';
+
+  container.innerHTML = `
+    <div style="margin-top:20px;">
+      ${cacheInfo}
+
+      <!-- Verdict -->
+      <div class="verdict-box">
+        <div class="verdict-title">Overall Verdict</div>
+        <div class="verdict-text">${esc(a.overallVerdict)}</div>
+      </div>
+
+      <!-- Expert Feedback -->
+      <div style="margin-top:24px;">
+        <h3 style="color:#fff;font-size:16px;margin-bottom:12px;">Expert Feedback</h3>
+        <div class="expert-tabs">
+          ${a.expertFeedback.map((e, i) => `
+            <div class="expert-tab${i === 0 ? ' active' : ''}" onclick="switchExpertTab(${i})" id="exp-tab-${i}">
+              ${esc(e.expertName)}
+            </div>
+          `).join('')}
+        </div>
+        ${a.expertFeedback.map((e, i) => renderExpertPanel(e, i)).join('')}
+      </div>
+
+      <!-- Timestamp Analysis -->
+      ${a.timestampAnalysis.length > 0 ? `
+      <div class="timestamp-section">
+        <h3>Drop-off Content Analysis</h3>
+        <p style="color:#888;font-size:13px;margin-bottom:12px;">What's happening in the video at each major drop-off point</p>
+        ${a.timestampAnalysis.map(ts => `
+          <div class="ts-card">
+            <div class="ts-time">${esc(ts.formattedTime || ts.timestamp)}</div>
+            <div class="ts-row"><span class="ts-label">On Screen: </span><span class="ts-content">${esc(ts.contentDescription)}</span></div>
+            <div class="ts-row"><span class="ts-label">Audio: </span><span class="ts-content">${esc(ts.audioDescription)}</span></div>
+            <div class="ts-row"><span class="ts-label">Issue: </span><span class="ts-issue">${esc(ts.issue)}</span></div>
+            <div class="ts-row"><span class="ts-label">Fix: </span><span class="ts-fix">${esc(ts.fix)}</span></div>
+          </div>
+        `).join('')}
+      </div>` : ''}
+
+      <!-- CRO Tests -->
+      ${a.croTests.length > 0 ? `
+      <div class="cro-section">
+        <h3>CRO Test Suggestions</h3>
+        <p style="color:#888;font-size:13px;margin-bottom:12px;">A/B tests to improve video performance</p>
+        ${a.croTests.map(t => `
+          <div class="cro-card">
+            <div class="cro-name">${esc(t.testName)}</div>
+            <div class="cro-row"><span class="cro-label">Hypothesis</span><span class="cro-value">${esc(t.hypothesis)}</span></div>
+            <div class="cro-row"><span class="cro-label">Control</span><span class="cro-value">${esc(t.control)}</span></div>
+            <div class="cro-row"><span class="cro-label">Variant</span><span class="cro-value">${esc(t.variant)}</span></div>
+            <div class="cro-row"><span class="cro-label">Impact</span><span class="cro-value">${esc(t.expectedImpact)}</span></div>
+            <div class="cro-row"><span class="cro-label">How To</span><span class="cro-value">${esc(t.implementation)}</span></div>
+          </div>
+        `).join('')}
+      </div>` : ''}
+
+      <!-- Script Structure -->
+      ${a.scriptStructure ? `
+      <div class="script-section">
+        <h3>Script Structure Analysis</h3>
+        <div class="script-grid">
+          ${renderScriptCard('Hook', a.scriptStructure.hook)}
+          ${renderScriptCard('Problem', a.scriptStructure.problem)}
+          ${renderScriptCard('Solution', a.scriptStructure.solution)}
+          ${renderScriptCard('Proof', a.scriptStructure.proof)}
+          ${renderScriptCard('CTA', a.scriptStructure.cta)}
+        </div>
+        <div class="script-flow">
+          <div class="script-label">Overall Flow</div>
+          <div class="script-text">${esc(a.scriptStructure.overallFlow)}</div>
+        </div>
+      </div>` : ''}
+    </div>
+  `;
+}
+
+function renderExpertPanel(expert, index) {
+  return `
+    <div class="expert-panel${index === 0 ? ' active' : ''}" id="exp-panel-${index}">
+      <div class="expert-header">
+        <div>
+          <div class="expert-name">${esc(expert.expertName)}</div>
+          <div class="expert-role">${esc(expert.expertRole)}</div>
+        </div>
+      </div>
+      <div class="expert-assessment">${esc(expert.overallAssessment)}</div>
+
+      ${expert.strengths.length > 0 ? `
+      <div class="expert-strengths">
+        <h4>Strengths</h4>
+        <ul class="expert-list">${expert.strengths.map(s => `<li>${esc(s)}</li>`).join('')}</ul>
+      </div>` : ''}
+
+      ${expert.weaknesses.length > 0 ? `
+      <div class="expert-weaknesses">
+        <h4>Weaknesses</h4>
+        <ul class="expert-list">${expert.weaknesses.map(w => `<li>${esc(w)}</li>`).join('')}</ul>
+      </div>` : ''}
+
+      ${expert.specificFixes.length > 0 ? `
+      <div class="expert-fixes">
+        <h4>Specific Fixes</h4>
+        ${expert.specificFixes.map(f => `
+          <div class="fix-item">
+            <div class="fix-timestamp">${esc(f.timestamp)}</div>
+            <div class="fix-issue">${esc(f.issue)}</div>
+            <div class="fix-solution">${esc(f.fix)}</div>
+          </div>
+        `).join('')}
+      </div>` : ''}
+
+      <div class="expert-priority">
+        <h4>#1 Priority Action</h4>
+        <p>${esc(expert.priorityAction)}</p>
+      </div>
+    </div>
+  `;
+}
+
+function switchExpertTab(index) {
+  // Deactivate all
+  document.querySelectorAll('.expert-tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.expert-panel').forEach(p => p.classList.remove('active'));
+  // Activate selected
+  document.getElementById('exp-tab-' + index)?.classList.add('active');
+  document.getElementById('exp-panel-' + index)?.classList.add('active');
+  activeExpertTab = index;
+}
+
+function renderScriptCard(label, text) {
+  if (!text) return '';
+  return `<div class="script-card">
+    <div class="script-label">${label}</div>
+    <div class="script-text">${esc(text)}</div>
+  </div>`;
+}
+
+function timeAgo(ts) {
+  if (!ts) return '';
+  const diff = Date.now() - ts;
+  const mins = Math.floor(diff / 60000);
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  const days = Math.floor(hrs / 24);
+  return `${days}d ago`;
+}
+
+// ── Utilities ──
+function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+function show(id) { document.getElementById(id).classList.remove('hidden'); }
+function hide(id) { document.getElementById(id).classList.add('hidden'); }
+</script>
+</body>
+</html>

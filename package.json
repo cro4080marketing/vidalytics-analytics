@@ -1,0 +1,26 @@
+{
+  "name": "vidalytics-analytics",
+  "version": "2.0.0",
+  "description": "Video analytics dashboard for Vidalytics with AI expert feedback",
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/server.js",
+    "dev": "npx tsx src/server.ts",
+    "discover": "npx tsx src/discover.ts"
+  },
+  "dependencies": {
+    "@google/genai": "^1.38.0",
+    "dotenv": "^16.4.7",
+    "express": "^5.2.1"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.6",
+    "@types/node": "^22.0.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  }
+}
