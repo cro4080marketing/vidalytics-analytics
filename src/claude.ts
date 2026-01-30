@@ -37,7 +37,8 @@ export class ClaudeRewriter {
     transcript: string,
     expert: ExpertFeedback,
     scriptStructure: ScriptStructure,
-    onProgress?: RewriteProgressCallback
+    onProgress?: RewriteProgressCallback,
+    videoContext?: string
   ): Promise<{ rewrittenScript: RewrittenScript; cached: boolean; cachedAt?: number }> {
     const progress = onProgress ?? (() => {});
 
@@ -54,7 +55,7 @@ export class ClaudeRewriter {
     progress(1, 4, "Preparing analysis", `Gathering ${expert.expertName}'s feedback...`);
 
     // Build the rewrite prompt
-    const prompt = buildRewritePrompt(transcript, expert, scriptStructure);
+    const prompt = buildRewritePrompt(transcript, expert, scriptStructure, videoContext);
 
     progress(2, 4, "Rewriting script", `${expert.expertName} is rewriting your script...`);
 
@@ -129,7 +130,8 @@ export class ClaudeRewriter {
     expert: ExpertFeedback,
     allPreviousTestNames: string[],
     batchNumber: number,
-    onProgress?: RewriteProgressCallback
+    onProgress?: RewriteProgressCallback,
+    videoContext?: string
   ): Promise<{ generatedTests: GeneratedCROTests; cached: boolean; cachedAt?: number }> {
     const progress = onProgress ?? (() => {});
 
@@ -145,7 +147,7 @@ export class ClaudeRewriter {
 
     progress(1, 3, "Preparing context", `Gathering ${expert.expertName}'s expertise and existing tests...`);
 
-    const prompt = buildCROTestPrompt(transcript, expert, allPreviousTestNames, batchNumber);
+    const prompt = buildCROTestPrompt(transcript, expert, allPreviousTestNames, batchNumber, videoContext);
 
     progress(2, 3, "Generating new tests", `${expert.expertName} is creating fresh split test ideas...`);
 
@@ -205,7 +207,8 @@ export class ClaudeRewriter {
 function buildRewritePrompt(
   transcript: string,
   expert: ExpertFeedback,
-  scriptStructure: ScriptStructure
+  scriptStructure: ScriptStructure,
+  videoContext?: string
 ): string {
   const fixes = expert.specificFixes
     .map((f) => `- At ${f.timestamp}: Issue: ${f.issue} → Fix: ${f.fix}`)
@@ -221,8 +224,12 @@ function buildRewritePrompt(
     )
     .join("\n");
 
-  return `You are ${expert.expertName}, ${expert.expertRole}. You have just reviewed a video sales letter (VSL) and provided feedback. Now you need to REWRITE the entire script implementing your recommendations.
+  const contextBlock = videoContext
+    ? `\n## VIDEO CONTEXT (provided by the user)\n${videoContext}\n\nUse this context when rewriting. Tailor the script to the specific audience, funnel placement, and product described above.\n`
+    : "";
 
+  return `You are ${expert.expertName}, ${expert.expertRole}. You have just reviewed a video sales letter (VSL) and provided feedback. Now you need to REWRITE the entire script implementing your recommendations.
+${contextBlock}
 ## YOUR EXPERT ASSESSMENT
 
 Overall: ${expert.overallAssessment}
@@ -329,7 +336,8 @@ function buildCROTestPrompt(
   transcript: string,
   expert: ExpertFeedback,
   allPreviousTestNames: string[],
-  batchNumber: number
+  batchNumber: number,
+  videoContext?: string
 ): string {
   const existingTests = expert.croTests
     .map((t) => `- ${t.testName}: ${t.hypothesis}`)
@@ -347,8 +355,12 @@ function buildCROTestPrompt(
         ? "Think more creatively. Consider unconventional approaches and cross-domain inspiration."
         : "Go bold. Push the boundaries of what's been tested before. Consider radical departures, contrarian approaches, and breakthrough experiments.";
 
-  return `You are ${expert.expertName}, ${expert.expertRole}. You have already analyzed a video sales letter and provided feedback and CRO tests. Now you need to generate 3 COMPLETELY NEW and UNIQUE split test ideas.
+  const contextBlock = videoContext
+    ? `\n## VIDEO CONTEXT (provided by the user)\n${videoContext}\n\nUse this context when generating tests. Tailor tests to the specific audience, funnel placement, and product described above.\n`
+    : "";
 
+  return `You are ${expert.expertName}, ${expert.expertRole}. You have already analyzed a video sales letter and provided feedback and CRO tests. Now you need to generate 3 COMPLETELY NEW and UNIQUE split test ideas.
+${contextBlock}
 ## YOUR ORIGINAL ASSESSMENT
 
 ${expert.overallAssessment}

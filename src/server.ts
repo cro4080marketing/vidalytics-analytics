@@ -167,6 +167,7 @@ app.get("/api/videos/:id/content-analysis", async (req, res) => {
 
   // Check if client wants SSE (streaming progress)
   const wantSSE = req.query.stream === "1";
+  const videoContext = (req.query.context as string) || "";
 
   if (wantSSE) {
     // SSE headers
@@ -204,7 +205,8 @@ app.get("/api/videos/:id/content-analysis", async (req, res) => {
       const significantDrops = findSignificantDrops(dropOff);
 
       const result = await gemini.analyze(
-        videoId, video.videoUrl, video.title, stats, significantDrops, onProgress
+        videoId, video.videoUrl, video.title, stats, significantDrops, onProgress,
+        videoContext || undefined
       );
 
       sendEvent("complete", {
@@ -236,7 +238,7 @@ app.get("/api/videos/:id/content-analysis", async (req, res) => {
       if (!video.videoUrl) { res.status(400).json({ error: "No video URL available for this video" }); return; }
 
       const significantDrops = findSignificantDrops(dropOff);
-      const result = await gemini.analyze(videoId, video.videoUrl, video.title, stats, significantDrops);
+      const result = await gemini.analyze(videoId, video.videoUrl, video.title, stats, significantDrops, undefined, videoContext || undefined);
 
       res.json({ analysis: result.analysis, cached: result.cached, cachedAt: result.cachedAt ?? null });
     } catch (err: unknown) {
@@ -271,6 +273,7 @@ app.get("/api/videos/:id/rewrite-script", async (req, res) => {
   const videoId = req.params.id;
   const expertIndex = parseInt((req.query.expert as string) || "0", 10);
   const wantSSE = req.query.stream === "1";
+  const videoContext = (req.query.context as string) || "";
 
   // Load the cached AI analysis (must exist already)
   const analysisKey = cacheKey(`ai-analysis-${videoId}`, {});
@@ -344,7 +347,8 @@ app.get("/api/videos/:id/rewrite-script", async (req, res) => {
 
     try {
       const result = await claude.rewrite(
-        videoId, expertIndex, analysis.transcript, expert, analysis.scriptStructure, onProgress
+        videoId, expertIndex, analysis.transcript, expert, analysis.scriptStructure, onProgress,
+        videoContext || undefined
       );
 
       sendEvent("complete", {
@@ -362,7 +366,8 @@ app.get("/api/videos/:id/rewrite-script", async (req, res) => {
     // Standard JSON response
     try {
       const result = await claude.rewrite(
-        videoId, expertIndex, analysis.transcript, expert, analysis.scriptStructure
+        videoId, expertIndex, analysis.transcript, expert, analysis.scriptStructure, undefined,
+        videoContext || undefined
       );
 
       res.json({
@@ -389,6 +394,7 @@ app.get("/api/videos/:id/generate-cro-tests", async (req, res) => {
   const videoId = req.params.id;
   const expertIndex = parseInt((req.query.expert as string) || "0", 10);
   const wantSSE = req.query.stream === "1";
+  const videoContext = (req.query.context as string) || "";
 
   // Load the cached AI analysis (must exist already)
   const analysisKey = cacheKey(`ai-analysis-${videoId}`, {});
@@ -467,7 +473,8 @@ app.get("/api/videos/:id/generate-cro-tests", async (req, res) => {
     try {
       const result = await claude.generateCROTests(
         videoId, expertIndex, analysis.transcript, expert,
-        allPreviousTestNames, nextBatch, onProgress
+        allPreviousTestNames, nextBatch, onProgress,
+        videoContext || undefined
       );
 
       sendEvent("complete", {
@@ -486,7 +493,8 @@ app.get("/api/videos/:id/generate-cro-tests", async (req, res) => {
     try {
       const result = await claude.generateCROTests(
         videoId, expertIndex, analysis.transcript, expert,
-        allPreviousTestNames, nextBatch
+        allPreviousTestNames, nextBatch, undefined,
+        videoContext || undefined
       );
       res.json({
         generatedTests: result.generatedTests,

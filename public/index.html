@@ -169,6 +169,27 @@ tr.selected { background: #1a2332; }
 .ai-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 .ai-cache-info { display: inline-block; margin-left: 12px; font-size: 12px; color: #888; }
 
+/* Video Context */
+.context-section {
+  margin-bottom: 16px;
+}
+.context-label {
+  color: #888; font-size: 12px; margin-bottom: 6px;
+  display: flex; align-items: center; gap: 6px;
+}
+.context-label .optional-tag {
+  background: rgba(59,130,246,0.1); color: #60a5fa; font-size: 10px;
+  padding: 1px 6px; border-radius: 3px; text-transform: uppercase; font-weight: 600;
+}
+.context-textarea {
+  width: 100%; min-height: 70px; max-height: 200px; resize: vertical;
+  background: #141414; border: 1px solid #333; border-radius: 8px;
+  color: #e5e5e5; padding: 10px 12px; font-size: 13px; font-family: inherit;
+  line-height: 1.5;
+}
+.context-textarea::placeholder { color: #555; }
+.context-textarea:focus { outline: none; border-color: #7c3aed; }
+
 .ai-loading {
   padding: 30px 20px; color: #888;
 }
@@ -508,6 +529,7 @@ let rewriteAvailable = false;
 let activeExpertTab = 0;
 let currentAIAnalysis = null; // Store for rewriter access
 let generatedCROBatches = {}; // { 'expert0': [batch1, batch2, ...] }
+let videoContexts = {}; // { 'videoId': 'context text' }
 
 // ── Init ──
 (function init() {
@@ -619,7 +641,7 @@ async function loadNewCROTests(videoId, expertIndex, expertName) {
   const to = document.getElementById('date-to').value;
 
   try {
-    const url = `/api/videos/${videoId}/generate-cro-tests?expert=${expertIndex}&from=${from}&to=${to}&stream=1`;
+    const url = `/api/videos/${videoId}/generate-cro-tests?expert=${expertIndex}&from=${from}&to=${to}&stream=1${encodeContext()}`;
     const eventSource = new EventSource(url);
 
     await new Promise((resolve, reject) => {
@@ -742,7 +764,7 @@ async function loadScriptRewrite(videoId, expertIndex, expertName) {
   const to = document.getElementById('date-to').value;
 
   try {
-    const url = `/api/videos/${videoId}/rewrite-script?expert=${expertIndex}&from=${from}&to=${to}&stream=1`;
+    const url = `/api/videos/${videoId}/rewrite-script?expert=${expertIndex}&from=${from}&to=${to}&stream=1${encodeContext()}`;
     const eventSource = new EventSource(url);
 
     await new Promise((resolve, reject) => {
@@ -877,6 +899,21 @@ function renderProgressBar(step, totalSteps, label, detail) {
     </div>`;
 }
 
+function getVideoContext() {
+  const el = document.getElementById('video-context');
+  return el ? el.value.trim() : '';
+}
+
+function saveVideoContext(videoId) {
+  const ctx = getVideoContext();
+  if (ctx) videoContexts[videoId] = ctx;
+}
+
+function encodeContext() {
+  const ctx = getVideoContext();
+  return ctx ? '&context=' + encodeURIComponent(ctx) : '';
+}
+
 async function loadAIAnalysis(videoId) {
   const container = document.getElementById('ai-container');
   if (!container) return;
@@ -888,8 +925,11 @@ async function loadAIAnalysis(videoId) {
   const to = document.getElementById('date-to').value;
 
   try {
+    // Save context for this video
+    saveVideoContext(videoId);
+
     // Use SSE for real-time progress
-    const url = `/api/videos/${videoId}/content-analysis?from=${from}&to=${to}&stream=1`;
+    const url = `/api/videos/${videoId}/content-analysis?from=${from}&to=${to}&stream=1${encodeContext()}`;
     const eventSource = new EventSource(url);
 
     await new Promise((resolve, reject) => {
@@ -1115,6 +1155,14 @@ function renderDetail(data) {
       <p style="color:#888;font-size:13px;margin-bottom:12px;">
         Uses Google Gemini to watch your actual video, analyze the content at drop-off points, and provide expert feedback from 5 direct response marketing legends.
       </p>
+      <div class="context-section">
+        <div class="context-label">
+          Video Context <span class="optional-tag">Optional</span>
+        </div>
+        <textarea class="context-textarea" id="video-context"
+          placeholder="e.g. This is a post-purchase upsell video for buyers of our $97 fitness program. The audience already bought the core product and this offers a $197 advanced coaching add-on. It appears right after checkout."
+        >${esc(videoContexts[a.videoId] || '')}</textarea>
+      </div>
       <button class="ai-btn" id="ai-analyze-btn" onclick="loadAIAnalysis('${a.videoId}')">
         Analyze Video Content with AI
       </button>

@@ -34,7 +34,8 @@ export class GeminiAnalyzer {
     videoTitle: string,
     stats: VideoStats,
     drops: SignificantDrop[],
-    onProgress?: ProgressCallback
+    onProgress?: ProgressCallback,
+    videoContext?: string
   ): Promise<{ analysis: ContentAnalysis; cached: boolean; cachedAt?: number }> {
     const progress = onProgress ?? (() => {});
 
@@ -48,11 +49,12 @@ export class GeminiAnalyzer {
 
     console.log(`[Gemini] Starting AI analysis for "${videoTitle}" (${videoId})`);
     console.log(`[Gemini] Video URL: ${videoUrl}`);
+    if (videoContext) console.log(`[Gemini] Context provided: ${videoContext.substring(0, 100)}...`);
 
     progress(1, 6, "Downloading video", "Fetching from Vidalytics CDN...");
 
     // Build the analysis prompt
-    const prompt = buildPrompt(videoTitle, stats, drops);
+    const prompt = buildPrompt(videoTitle, stats, drops, videoContext);
 
     // Upload the video to Gemini and analyze
     const analysis = await this.analyzeWithVideo(videoId, videoUrl, prompt, progress);
@@ -218,7 +220,8 @@ export class GeminiAnalyzer {
 function buildPrompt(
   videoTitle: string,
   stats: VideoStats,
-  drops: SignificantDrop[]
+  drops: SignificantDrop[],
+  videoContext?: string
 ): string {
   const dropsList = drops
     .map(
@@ -227,7 +230,12 @@ function buildPrompt(
     )
     .join("\n");
 
+  const contextBlock = videoContext
+    ? `\n## VIDEO CONTEXT (provided by the user)\n${videoContext}\n\nUse this context to tailor your analysis. For example, if this is a post-purchase upsell, evaluate the offer differently than a cold-traffic VSL. If a specific audience or product is mentioned, factor that into your feedback.\n`
+    : "";
+
   return `You are analyzing a video sales letter (VSL) / marketing video titled "${videoTitle}".
+${contextBlock}
 
 ## VIDEO PERFORMANCE DATA
 
