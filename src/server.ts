@@ -12,7 +12,7 @@ import {
   ratingFromScore,
   findSignificantDrops,
 } from "./analyzer.js";
-import type { VideoStats, ContentAnalysis, GeneratedCROTests } from "./types.js";
+import type { VideoStats, ContentAnalysis, GeneratedCROTests, VideoComparison } from "./types.js";
 import { cacheKey, readCache, readCacheWithMeta } from "./cache.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -505,6 +505,128 @@ app.get("/api/videos/:id/generate-cro-tests", async (req, res) => {
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       console.error(`[CRO Test Generation Error] ${msg}`);
+      res.status(500).json({ error: msg });
+    }
+  }
+});
+
+// ── Video Comparison (Claude) ──
+
+app.get("/api/compare/:idA/:idB", async (req, res) => {
+  if (!claude) {
+    res.status(503).json({ error: "Comparison not available. Add ANTHROPIC_API_KEY to .env." });
+    return;
+  }
+
+  const { idA, idB } = req.params;
+  const wantSSE = req.query.stream === "1";
+  const dateFrom = (req.query.from as string) || defaultDateFrom();
+  const dateTo = (req.query.to as string) || defaultDateTo();
+
+  // Load cached AI analyses for both videos (must exist)
+  const keyA = cacheKey(`ai-analysis-${idA}`, {});
+  const keyB = cacheKey(`ai-analysis-${idB}`, {});
+  const cachedA = readCacheWithMeta<ContentAnalysis>(keyA);
+  const cachedB = readCacheWithMeta<ContentAnalysis>(keyB);
+
+  if (!cachedA || !cachedB) {
+    const missing = !cachedA && !cachedB ? "both videos" : !cachedA ? "Video A" : "Video B";
+    const errMsg = `AI analysis must be run for ${missing} first. Analyze each video individually before comparing.`;
+    if (wantSSE) {
+      res.writeHead(200, { "Content-Type": "text/event-stream", "Cache-Control": "no-cache", Connection: "keep-alive" });
+      res.write(`event: error\ndata: ${JSON.stringify({ error: errMsg })}\n\n`);
+      res.end();
+    } else {
+      res.status(400).json({ error: errMsg });
+    }
+    return;
+  }
+
+  if (wantSSE) {
+    res.writeHead(200, { "Content-Type": "text/event-stream", "Cache-Control": "no-cache", Connection: "keep-alive" });
+
+    const sendEvent = (event: string, data: unknown) => {
+      res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+    };
+    const onProgress = (step: number, totalSteps: number, label: string, detail?: string) => {
+      sendEvent("progress", { step, totalSteps, label, detail: detail ?? "" });
+    };
+
+    try {
+      sendEvent("progress", { step: 0, totalSteps: 4, label: "Loading video data", detail: "Fetching stats for both videos..." });
+
+      const [videos, statsA, statsB] = await Promise.all([
+        client.listVideos(),
+        client.getVideoStats(idA, dateFrom, dateTo),
+        client.getVideoStats(idB, dateFrom, dateTo),
+      ]);
+
+      const videoA = videos.find((v) => v.id === idA);
+      const videoB = videos.find((v) => v.id === idB);
+      if (!videoA || !videoB) {
+        sendEvent("error", { error: "One or both videos not found" });
+        res.end();
+        return;
+      }
+
+      const scoreA = (await import("./analyzer.js")).calculateScore(statsA);
+      const scoreB = (await import("./analyzer.js")).calculateScore(statsB);
+
+      const result = await claude.compareVideos(
+        idA, idB,
+        videoA.title, videoB.title,
+        scoreA, scoreB,
+        statsA, statsB,
+        cachedA.data, cachedB.data,
+        onProgress
+      );
+
+      sendEvent("complete", {
+        comparison: result.comparison,
+        cached: result.cached,
+        cachedAt: result.cachedAt ?? null,
+        statsA, statsB,
+        scoreA, scoreB,
+      });
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error(`[Comparison Error] ${msg}`);
+      sendEvent("error", { error: msg });
+    }
+    res.end();
+  } else {
+    try {
+      const [videos, statsA, statsB] = await Promise.all([
+        client.listVideos(),
+        client.getVideoStats(idA, dateFrom, dateTo),
+        client.getVideoStats(idB, dateFrom, dateTo),
+      ]);
+
+      const videoA = videos.find((v) => v.id === idA);
+      const videoB = videos.find((v) => v.id === idB);
+      if (!videoA || !videoB) { res.status(404).json({ error: "One or both videos not found" }); return; }
+
+      const scoreA = (await import("./analyzer.js")).calculateScore(statsA);
+      const scoreB = (await import("./analyzer.js")).calculateScore(statsB);
+
+      const result = await claude.compareVideos(
+        idA, idB,
+        videoA.title, videoB.title,
+        scoreA, scoreB,
+        statsA, statsB,
+        cachedA.data, cachedB.data
+      );
+
+      res.json({
+        comparison: result.comparison,
+        cached: result.cached,
+        cachedAt: result.cachedAt ?? null,
+        statsA, statsB,
+        scoreA, scoreB,
+      });
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error(`[Comparison Error] ${msg}`);
       res.status(500).json({ error: msg });
     }
   }

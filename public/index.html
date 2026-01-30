@@ -496,6 +496,120 @@ tr.selected { background: #1a2332; }
 }
 .report-btn:hover { opacity: 0.9; }
 .report-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* Comparison Mode */
+.compare-btn {
+  background: linear-gradient(135deg, #f59e0b, #ef4444);
+  color: #fff; border: none; border-radius: 8px;
+  padding: 8px 16px; font-size: 13px; font-weight: 600;
+  cursor: pointer; margin-left: 8px;
+}
+.compare-btn:hover { opacity: 0.9; }
+.compare-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.compare-btn.active { background: linear-gradient(135deg, #ef4444, #dc2626); }
+
+.compare-check { width: 18px; height: 18px; accent-color: #f59e0b; cursor: pointer; }
+.compare-bar {
+  background: linear-gradient(135deg, #1e1e2e, #2a2a3e);
+  border: 1px solid #f59e0b33; border-radius: 10px;
+  padding: 12px 20px; margin-bottom: 16px;
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+}
+.compare-bar .selected-tag {
+  background: #f59e0b22; color: #f59e0b; border: 1px solid #f59e0b44;
+  border-radius: 6px; padding: 4px 10px; font-size: 12px; font-weight: 600;
+}
+.compare-bar .go-btn {
+  background: linear-gradient(135deg, #f59e0b, #ef4444);
+  color: #fff; border: none; border-radius: 8px;
+  padding: 8px 20px; font-size: 13px; font-weight: 600;
+  cursor: pointer; margin-left: auto;
+}
+.compare-bar .go-btn:hover { opacity: 0.9; }
+
+/* Comparison View */
+#compare-view {
+  position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+  background: #0d0d14; z-index: 200; overflow-y: auto;
+  display: none;
+}
+#compare-view.visible { display: block; }
+.compare-inner { max-width: 1100px; margin: 0 auto; padding: 24px; }
+.compare-topbar {
+  display: flex; align-items: center; gap: 12px; margin-bottom: 24px; flex-wrap: wrap;
+}
+.compare-vs {
+  display: flex; align-items: center; gap: 16px; flex: 1; justify-content: center; flex-wrap: wrap;
+}
+.compare-video-card {
+  background: #1a1a2e; border-radius: 10px; padding: 14px 20px;
+  border: 2px solid #333; min-width: 200px; text-align: center;
+}
+.compare-video-card.winner { border-color: #22c55e; }
+.compare-video-card.loser { border-color: #ef4444; }
+.compare-video-card .cv-name { font-weight: 700; font-size: 14px; color: #eee; margin-bottom: 4px; }
+.compare-video-card .cv-score { font-size: 22px; font-weight: 800; }
+.compare-vs-divider { font-size: 24px; font-weight: 900; color: #f59e0b; }
+
+.compare-metrics-table { width: 100%; border-collapse: collapse; margin-bottom: 24px; }
+.compare-metrics-table th {
+  background: #1a1a2e; color: #aaa; padding: 10px; text-align: left;
+  font-size: 12px; text-transform: uppercase; border-bottom: 1px solid #333;
+}
+.compare-metrics-table td {
+  padding: 10px; border-bottom: 1px solid #1a1a2e; font-size: 14px; color: #eee;
+}
+.compare-metrics-table tr:hover { background: #1a1a2e44; }
+.metric-winner { color: #22c55e; font-weight: 700; }
+.metric-loser { color: #ef4444; }
+.metric-diff { font-size: 11px; color: #888; }
+
+.compare-ai-section { margin-top: 24px; }
+.compare-ai-btn {
+  background: linear-gradient(135deg, #f59e0b, #8b5cf6);
+  color: #fff; border: none; border-radius: 10px;
+  padding: 12px 28px; font-size: 15px; font-weight: 700;
+  cursor: pointer; width: 100%; margin-bottom: 16px;
+}
+.compare-ai-btn:hover { opacity: 0.9; }
+.compare-ai-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.comparison-result { margin-top: 16px; }
+.comp-summary {
+  background: linear-gradient(135deg, #1a1a2e, #2d1b4e);
+  border: 1px solid #8b5cf644; border-radius: 10px;
+  padding: 20px; margin-bottom: 20px; color: #e0e0e0; line-height: 1.6;
+}
+.comp-section { margin-bottom: 20px; }
+.comp-section h4 { color: #f59e0b; font-size: 14px; margin-bottom: 8px; }
+.comp-list { list-style: none; padding: 0; }
+.comp-list li { padding: 6px 0 6px 18px; position: relative; color: #ccc; font-size: 13px; }
+.comp-list li::before { content: '→'; position: absolute; left: 0; color: #f59e0b; }
+.comp-list.green li::before { color: #22c55e; content: '✓'; }
+.comp-list.red li::before { color: #ef4444; content: '✗'; }
+
+.comp-diff-table { width: 100%; border-collapse: collapse; margin-bottom: 16px; }
+.comp-diff-table th {
+  background: #1e293b; color: #aaa; padding: 8px 10px; font-size: 11px;
+  text-transform: uppercase; text-align: left;
+}
+.comp-diff-table td {
+  padding: 8px 10px; border-bottom: 1px solid #1a1a2e; font-size: 12px; color: #ddd;
+}
+
+.comp-action-plan { counter-reset: step; }
+.comp-action-plan li {
+  padding: 10px 10px 10px 40px; position: relative; color: #ddd; font-size: 13px;
+  background: #1a1a2e; border-radius: 8px; margin-bottom: 6px; list-style: none;
+}
+.comp-action-plan li::before {
+  counter-increment: step;
+  content: counter(step);
+  position: absolute; left: 10px; top: 10px;
+  background: #f59e0b; color: #000; width: 22px; height: 22px;
+  border-radius: 50%; text-align: center; line-height: 22px;
+  font-weight: 800; font-size: 12px;
+}
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.2/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.4/jspdf.plugin.autotable.min.js"></script>
@@ -519,7 +633,10 @@ tr.selected { background: #1a2332; }
     <label style="color:#888;font-size:13px;">To</label>
     <input type="date" id="date-to" />
     <button id="btn-analyze" onclick="loadDashboard()">Analyze</button>
+    <button class="compare-btn" id="btn-compare" onclick="toggleComparisonMode()">Compare Videos</button>
   </div>
+
+  <div id="compare-bar-container"></div>
 
   <div id="error-box" class="error-msg hidden"></div>
   <div id="loading" class="loading hidden"><div class="spinner"></div><div>Loading video data...</div></div>
@@ -530,6 +647,9 @@ tr.selected { background: #1a2332; }
 </div>
 <div id="detail-view">
   <div class="detail-inner" id="detail-content"></div>
+</div>
+<div id="compare-view">
+  <div class="compare-inner" id="compare-content"></div>
 </div>
 
 <script>
@@ -544,6 +664,8 @@ let currentAIAnalysis = null; // Store for rewriter access
 let generatedCROBatches = {}; // { 'expert0': [batch1, batch2, ...] }
 let videoContexts = {}; // { 'videoId': 'context text' }
 let currentVideoDetail = null; // { analysis, dropOff, stats } for report
+let comparisonMode = false;
+let selectedForComparison = []; // max 2 video IDs
 
 // ── Init ──
 (function init() {
@@ -1041,8 +1163,10 @@ function renderAlerts(s) {
 // ── Render Video Table ──
 function renderTable(videos) {
   const arrow = (col) => currentSort.col === col ? (currentSort.dir === 'asc' ? ' ↑' : ' ↓') : '';
+  const showCheck = comparisonMode;
   document.getElementById('video-table').innerHTML = `<table>
     <thead><tr>
+      ${showCheck ? '<th style="width:40px;"></th>' : ''}
       <th onclick="sortBy('title')">Video${arrow('title')}</th>
       <th onclick="sortBy('plays')">Plays${arrow('plays')}</th>
       <th onclick="sortBy('engagement')">Engagement${arrow('engagement')}</th>
@@ -1054,7 +1178,10 @@ function renderTable(videos) {
     <tbody>${videos.map(v => {
       const s = v.stats;
       const sel = v.id === selectedVideoId ? ' selected' : '';
-      return `<tr class="clickable${sel}" onclick="selectVideo('${v.id}')">
+      const checked = selectedForComparison.includes(v.id) ? 'checked' : '';
+      const onclick = showCheck ? `onclick="event.stopPropagation(); toggleCompareSelect('${v.id}')"` : `onclick="selectVideo('${v.id}')"`;
+      return `<tr class="clickable${sel}" ${onclick}>
+        ${showCheck ? `<td style="text-align:center;"><input type="checkbox" class="compare-check" ${checked} onclick="event.stopPropagation(); toggleCompareSelect('${v.id}')" /></td>` : ''}
         <td class="video-name" title="${esc(v.title)}">${esc(v.title)}</td>
         <td>${s ? s.plays.toLocaleString() : '—'}</td>
         <td>${s ? (s.engagement*100).toFixed(1)+'%' : '—'}</td>
@@ -1402,6 +1529,286 @@ function timeAgo(ts) {
   if (hrs < 24) return `${hrs}h ago`;
   const days = Math.floor(hrs / 24);
   return `${days}d ago`;
+}
+
+// ── Video Comparison ──
+
+function toggleComparisonMode() {
+  comparisonMode = !comparisonMode;
+  selectedForComparison = [];
+  const btn = document.getElementById('btn-compare');
+  if (comparisonMode) {
+    btn.textContent = 'Cancel Comparison';
+    btn.classList.add('active');
+  } else {
+    btn.textContent = 'Compare Videos';
+    btn.classList.remove('active');
+  }
+  renderCompareBar();
+  renderTable(allVideos);
+}
+
+function toggleCompareSelect(videoId) {
+  const idx = selectedForComparison.indexOf(videoId);
+  if (idx >= 0) {
+    selectedForComparison.splice(idx, 1);
+  } else {
+    if (selectedForComparison.length >= 2) {
+      selectedForComparison.shift(); // Remove oldest
+    }
+    selectedForComparison.push(videoId);
+  }
+  renderCompareBar();
+  renderTable(allVideos);
+}
+
+function renderCompareBar() {
+  const container = document.getElementById('compare-bar-container');
+  if (!comparisonMode) { container.innerHTML = ''; return; }
+
+  const names = selectedForComparison.map(id => {
+    const v = allVideos.find(x => x.id === id);
+    return v ? esc(v.title) : id;
+  });
+
+  container.innerHTML = `
+    <div class="compare-bar">
+      <span style="color:#f59e0b;font-weight:700;font-size:13px;">SELECT 2 VIDEOS TO COMPARE</span>
+      ${names.map(n => `<span class="selected-tag">${n}</span>`).join('')}
+      ${selectedForComparison.length === 2
+        ? `<button class="go-btn" onclick="launchComparison()">Compare Selected</button>`
+        : `<span style="color:#888;font-size:12px;margin-left:auto;">${2 - selectedForComparison.length} more needed</span>`
+      }
+    </div>`;
+}
+
+function launchComparison() {
+  if (selectedForComparison.length !== 2) return;
+  const [idA, idB] = selectedForComparison;
+  const vA = allVideos.find(v => v.id === idA);
+  const vB = allVideos.find(v => v.id === idB);
+  if (!vA || !vB) return;
+
+  // Exit comparison mode
+  comparisonMode = false;
+  document.getElementById('btn-compare').textContent = 'Compare Videos';
+  document.getElementById('btn-compare').classList.remove('active');
+  renderCompareBar();
+  renderTable(allVideos);
+
+  // Open comparison view
+  openComparisonView(vA, vB);
+}
+
+function openComparisonView(vA, vB) {
+  const view = document.getElementById('compare-view');
+  const content = document.getElementById('compare-content');
+  view.classList.add('visible');
+  document.body.style.overflow = 'hidden';
+
+  const sA = vA.stats, sB = vB.stats;
+  const winA = vA.score >= vB.score;
+
+  function pct(v) { return v < 1 ? (v*100).toFixed(1)+'%' : v.toFixed(1)+'%'; }
+  function pct2(v) { return v < 1 ? (v*100).toFixed(2)+'%' : v.toFixed(2)+'%'; }
+  function money(v) { return '$'+v.toFixed(2); }
+  function num(v) { return v.toLocaleString(); }
+
+  const metrics = [
+    { label: 'Score', a: vA.score, b: vB.score, fmt: v => v },
+    { label: 'Play Rate', a: sA?.playRate, b: sB?.playRate, fmt: pct },
+    { label: 'Engagement', a: sA?.engagement, b: sB?.engagement, fmt: pct },
+    { label: 'Unmute Rate', a: sA?.unmuteRate, b: sB?.unmuteRate, fmt: pct },
+    { label: 'Conversion Rate', a: sA?.conversionRate, b: sB?.conversionRate, fmt: pct2 },
+    { label: 'Total Plays', a: sA?.plays, b: sB?.plays, fmt: num },
+    { label: 'Unique Plays', a: sA?.playsUnique, b: sB?.playsUnique, fmt: num },
+    { label: 'Revenue', a: sA?.revenue, b: sB?.revenue, fmt: money },
+    { label: 'Revenue/Viewer', a: sA?.revenuePerViewer, b: sB?.revenuePerViewer, fmt: money },
+    { label: 'Conversions', a: sA?.conversionCount, b: sB?.conversionCount, fmt: num },
+  ];
+
+  const metricsHtml = metrics.map(m => {
+    const a = m.a ?? 0, b = m.b ?? 0;
+    const wA = a > b, wB = b > a, tie = a === b;
+    const clsA = wA ? 'metric-winner' : wB ? 'metric-loser' : '';
+    const clsB = wB ? 'metric-winner' : wA ? 'metric-loser' : '';
+    const diff = a !== 0 ? ((b - a) / a * 100).toFixed(1) : '—';
+    return `<tr>
+      <td>${m.label}</td>
+      <td class="${clsA}">${m.fmt(a)}${wA ? ' ✓' : ''}</td>
+      <td class="${clsB}">${m.fmt(b)}${wB ? ' ✓' : ''}</td>
+      <td class="metric-diff">${tie ? 'Tied' : (diff > 0 ? '+' : '') + diff + '%'}</td>
+    </tr>`;
+  }).join('');
+
+  content.innerHTML = `
+    <div class="compare-topbar">
+      <button class="back-btn" onclick="closeComparison()">← Back to Dashboard</button>
+    </div>
+
+    <div class="compare-vs">
+      <div class="compare-video-card ${winA ? 'winner' : 'loser'}">
+        <div class="cv-name">${esc(vA.title)}</div>
+        <div class="cv-score badge badge-${vA.rating}" style="display:inline-block;">${vA.score}/100</div>
+        ${winA ? '<div style="color:#22c55e;font-size:11px;margin-top:4px;">WINNER</div>' : '<div style="color:#ef4444;font-size:11px;margin-top:4px;">UNDERPERFORMER</div>'}
+      </div>
+      <div class="compare-vs-divider">VS</div>
+      <div class="compare-video-card ${!winA ? 'winner' : 'loser'}">
+        <div class="cv-name">${esc(vB.title)}</div>
+        <div class="cv-score badge badge-${vB.rating}" style="display:inline-block;">${vB.score}/100</div>
+        ${!winA ? '<div style="color:#22c55e;font-size:11px;margin-top:4px;">WINNER</div>' : '<div style="color:#ef4444;font-size:11px;margin-top:4px;">UNDERPERFORMER</div>'}
+      </div>
+    </div>
+
+    <h3 style="margin-top:24px;">Metrics Comparison</h3>
+    <table class="compare-metrics-table">
+      <thead><tr>
+        <th>Metric</th>
+        <th>${esc(vA.title)}</th>
+        <th>${esc(vB.title)}</th>
+        <th>Difference</th>
+      </tr></thead>
+      <tbody>${metricsHtml}</tbody>
+    </table>
+
+    <div class="compare-ai-section">
+      <h3>AI Comparative Analysis</h3>
+      <p style="color:#888;font-size:13px;margin-bottom:12px;">Uses Claude to analyze both videos' expert feedback side-by-side and explain exactly where the underperformer falls short</p>
+      <button class="compare-ai-btn" id="compare-ai-btn"
+        onclick="loadComparisonAI('${vA.id}','${vB.id}')">
+        Run AI Comparison Analysis
+      </button>
+      <div id="compare-ai-container"></div>
+    </div>
+  `;
+}
+
+function closeComparison() {
+  document.getElementById('compare-view').classList.remove('visible');
+  document.body.style.overflow = '';
+  selectedForComparison = [];
+}
+
+async function loadComparisonAI(idA, idB) {
+  const container = document.getElementById('compare-ai-container');
+  const btn = document.getElementById('compare-ai-btn');
+  btn.disabled = true; btn.textContent = 'Analyzing...';
+
+  const from = document.getElementById('date-from').value;
+  const to = document.getElementById('date-to').value;
+
+  container.innerHTML = renderProgressBar(0, 4, 'Starting comparison...', 'compare');
+
+  const url = `/api/compare/${idA}/${idB}?from=${from}&to=${to}&stream=1`;
+  const eventSource = new EventSource(url);
+
+  const COMP_STEPS = [
+    { icon: '📋', label: 'Load' },
+    { icon: '📊', label: 'Prepare' },
+    { icon: '🧠', label: 'Analyze' },
+    { icon: '📝', label: 'Report' },
+  ];
+
+  eventSource.addEventListener('progress', (e) => {
+    const d = JSON.parse(e.data);
+    container.innerHTML = renderProgressBar(d.step, d.totalSteps, d.label + (d.detail ? ': ' + d.detail : ''), 'compare');
+  });
+
+  eventSource.addEventListener('complete', (e) => {
+    eventSource.close();
+    const d = JSON.parse(e.data);
+    btn.textContent = 'Re-run Comparison';
+    btn.disabled = false;
+    renderComparisonResult(d.comparison, container);
+  });
+
+  eventSource.addEventListener('error', (e) => {
+    eventSource.close();
+    btn.textContent = 'Retry Comparison';
+    btn.disabled = false;
+    try {
+      const d = JSON.parse(e.data);
+      container.innerHTML = `<div class="error-msg">${esc(d.error)}</div>`;
+    } catch {
+      container.innerHTML = `<div class="error-msg">Comparison failed. Both videos must have AI analysis run first.</div>`;
+    }
+  });
+}
+
+function renderComparisonResult(comp, container) {
+  const winnerName = comp.videoAScore >= comp.videoBScore ? comp.videoAName : comp.videoBName;
+  const loserName = comp.videoAScore >= comp.videoBScore ? comp.videoBName : comp.videoAName;
+
+  const diffsHtml = comp.keyDifferences.map(d => `
+    <tr>
+      <td style="font-weight:700;color:#f59e0b;">${esc(d.area)}</td>
+      <td>${esc(d.videoA)}</td>
+      <td>${esc(d.videoB)}</td>
+      <td style="color:#8b5cf6;">${esc(d.insight)}</td>
+    </tr>
+  `).join('');
+
+  const recsHtml = comp.specificRecommendations.map(r => `
+    <tr>
+      <td style="font-weight:700;color:#f59e0b;">${esc(r.area)}</td>
+      <td style="color:#ef4444;">${esc(r.currentState)}</td>
+      <td style="color:#22c55e;">${esc(r.recommendation)}</td>
+      <td style="color:#8b5cf6;">${esc(r.expectedImpact)}</td>
+    </tr>
+  `).join('');
+
+  container.innerHTML = `
+    <div class="comparison-result">
+      <div class="comp-summary">${esc(comp.summary)}</div>
+
+      <div class="comp-section">
+        <h4>What "${esc(winnerName)}" Does Well</h4>
+        <ul class="comp-list green">
+          ${comp.winnerStrengths.map(s => `<li>${esc(s)}</li>`).join('')}
+        </ul>
+      </div>
+
+      <div class="comp-section">
+        <h4>Where "${esc(loserName)}" Falls Short</h4>
+        <ul class="comp-list red">
+          ${comp.loserWeaknesses.map(w => `<li>${esc(w)}</li>`).join('')}
+        </ul>
+      </div>
+
+      <div class="comp-section">
+        <h4>Key Differences</h4>
+        <table class="comp-diff-table">
+          <thead><tr>
+            <th>Area</th>
+            <th>${esc(comp.videoAName)}</th>
+            <th>${esc(comp.videoBName)}</th>
+            <th>Insight</th>
+          </tr></thead>
+          <tbody>${diffsHtml}</tbody>
+        </table>
+      </div>
+
+      <div class="comp-section">
+        <h4>Specific Recommendations for "${esc(loserName)}"</h4>
+        <table class="comp-diff-table">
+          <thead><tr>
+            <th>Area</th>
+            <th>Current State</th>
+            <th>Recommendation</th>
+            <th>Expected Impact</th>
+          </tr></thead>
+          <tbody>${recsHtml}</tbody>
+        </table>
+      </div>
+
+      <div class="comp-section">
+        <h4>Prioritized Action Plan for "${esc(loserName)}"</h4>
+        <ol class="comp-action-plan">
+          ${comp.prioritizedActionPlan.map(step => `<li>${esc(step)}</li>`).join('')}
+        </ol>
+      </div>
+    </div>
+  `;
 }
 
 // ── PDF Report Generation ──

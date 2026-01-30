@@ -269,6 +269,34 @@ export interface GeneratedCROTests {
   previousTestNames: string[];
 }
 
+// ── Video Comparison (Claude) ──
+
+export interface VideoComparison {
+  videoAId: string;
+  videoBId: string;
+  videoAName: string;
+  videoBName: string;
+  videoAScore: number;
+  videoBScore: number;
+  comparedAt: string;
+  summary: string;
+  winnerStrengths: string[];
+  loserWeaknesses: string[];
+  keyDifferences: Array<{
+    area: string;
+    videoA: string;
+    videoB: string;
+    insight: string;
+  }>;
+  specificRecommendations: Array<{
+    area: string;
+    currentState: string;
+    recommendation: string;
+    expectedImpact: string;
+  }>;
+  prioritizedActionPlan: string[];
+}
+
 // ── Cache ──
 
 export interface CacheEntry<T> {
