@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import express from "express";
 import { VidalyticsClient } from "./vidalytics.js";
 import { GeminiAnalyzer } from "./gemini.js";
+import { ClaudeRewriter } from "./claude.js";
 import {
   analyzeVideo,
   analyzePortfolio,
@@ -11,7 +12,8 @@ import {
   ratingFromScore,
   findSignificantDrops,
 } from "./analyzer.js";
-import type { VideoStats } from "./types.js";
+import type { VideoStats, ContentAnalysis } from "./types.js";
+import { cacheKey, readCacheWithMeta } from "./cache.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -22,9 +24,11 @@ if (!apiToken) {
 }
 
 const geminiKey = process.env.GEMINI_API_KEY;
+const anthropicKey = process.env.ANTHROPIC_API_KEY;
 const port = parseInt(process.env.PORT || "3001", 10);
 const client = new VidalyticsClient(apiToken);
 const gemini = geminiKey ? new GeminiAnalyzer(geminiKey) : null;
+const claude = anthropicKey ? new ClaudeRewriter(anthropicKey) : null;
 const app = express();
 
 // ── Serve dashboard ──
@@ -243,12 +247,145 @@ app.get("/api/videos/:id/content-analysis", async (req, res) => {
   }
 });
 
+// ── Script Rewrite Routes (Claude) ──
+
+// Check if script rewriting is available
+app.get("/api/rewrite-status", (_req, res) => {
+  if (!claude) {
+    res.json({
+      available: false,
+      reason: "ANTHROPIC_API_KEY not set in .env file",
+    });
+    return;
+  }
+  res.json({ available: true });
+});
+
+// Rewrite script based on expert feedback (SSE streaming)
+app.get("/api/videos/:id/rewrite-script", async (req, res) => {
+  if (!claude) {
+    res.status(503).json({ error: "Script rewriting not available. Add ANTHROPIC_API_KEY to .env." });
+    return;
+  }
+
+  const videoId = req.params.id;
+  const expertIndex = parseInt((req.query.expert as string) || "0", 10);
+  const wantSSE = req.query.stream === "1";
+
+  // Load the cached AI analysis (must exist already)
+  const analysisKey = cacheKey(`ai-analysis-${videoId}`, {});
+  const cachedAnalysis = readCacheWithMeta<ContentAnalysis>(analysisKey);
+
+  if (!cachedAnalysis) {
+    if (wantSSE) {
+      res.writeHead(200, {
+        "Content-Type": "text/event-stream",
+        "Cache-Control": "no-cache",
+        Connection: "keep-alive",
+      });
+      res.write(`event: error\ndata: ${JSON.stringify({ error: "AI analysis must be run first. Click the AI Analysis button before rewriting." })}\n\n`);
+      res.end();
+    } else {
+      res.status(400).json({ error: "AI analysis must be run first. Click the AI Analysis button before rewriting." });
+    }
+    return;
+  }
+
+  const analysis = cachedAnalysis.data;
+  const expert = analysis.expertFeedback[expertIndex];
+
+  if (!expert) {
+    const errMsg = `Expert index ${expertIndex} not found. Available: 0-${analysis.expertFeedback.length - 1}`;
+    if (wantSSE) {
+      res.writeHead(200, {
+        "Content-Type": "text/event-stream",
+        "Cache-Control": "no-cache",
+        Connection: "keep-alive",
+      });
+      res.write(`event: error\ndata: ${JSON.stringify({ error: errMsg })}\n\n`);
+      res.end();
+    } else {
+      res.status(400).json({ error: errMsg });
+    }
+    return;
+  }
+
+  if (!analysis.transcript) {
+    const errMsg = "No transcript available. Re-run the AI analysis to generate a transcript.";
+    if (wantSSE) {
+      res.writeHead(200, {
+        "Content-Type": "text/event-stream",
+        "Cache-Control": "no-cache",
+        Connection: "keep-alive",
+      });
+      res.write(`event: error\ndata: ${JSON.stringify({ error: errMsg })}\n\n`);
+      res.end();
+    } else {
+      res.status(400).json({ error: errMsg });
+    }
+    return;
+  }
+
+  if (wantSSE) {
+    // SSE headers
+    res.writeHead(200, {
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache",
+      Connection: "keep-alive",
+    });
+
+    const sendEvent = (event: string, data: unknown) => {
+      res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+    };
+
+    const onProgress = (step: number, totalSteps: number, label: string, detail?: string) => {
+      sendEvent("progress", { step, totalSteps, label, detail: detail ?? "" });
+    };
+
+    try {
+      const result = await claude.rewrite(
+        videoId, expertIndex, analysis.transcript, expert, analysis.scriptStructure, onProgress
+      );
+
+      sendEvent("complete", {
+        rewrittenScript: result.rewrittenScript,
+        cached: result.cached,
+        cachedAt: result.cachedAt ?? null,
+      });
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error(`[Script Rewrite Error] ${msg}`);
+      sendEvent("error", { error: msg });
+    }
+    res.end();
+  } else {
+    // Standard JSON response
+    try {
+      const result = await claude.rewrite(
+        videoId, expertIndex, analysis.transcript, expert, analysis.scriptStructure
+      );
+
+      res.json({
+        rewrittenScript: result.rewrittenScript,
+        cached: result.cached,
+        cachedAt: result.cachedAt ?? null,
+      });
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error(`[Script Rewrite Error] ${msg}`);
+      res.status(500).json({ error: msg });
+    }
+  }
+});
+
 // ── Start ──
 
 app.listen(port, () => {
   console.log(`\nVidalytics Analytics Dashboard`);
   console.log(`http://localhost:${port}`);
   console.log(`API Token: ${apiToken.substring(0, 8)}...`);
+  if (gemini) console.log(`Gemini AI: enabled`);
+  if (claude) console.log(`Claude Script Rewriter: enabled`);
   console.log();
 });
 

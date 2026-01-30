@@ -10,6 +10,7 @@
     "discover": "npx tsx src/discover.ts"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.72.1",
     "@google/genai": "^1.38.0",
     "dotenv": "^16.4.7",
     "express": "^5.2.1"

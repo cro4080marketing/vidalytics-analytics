@@ -313,6 +313,100 @@ tr.selected { background: #1a2332; }
 .verdict-title { color: #7c3aed; font-size: 14px; font-weight: 600; margin-bottom: 8px; }
 .verdict-text { color: #e5e5e5; font-size: 15px; line-height: 1.6; }
 
+/* Script Rewriter */
+.rewrite-btn {
+  background: linear-gradient(135deg, #f59e0b, #ef4444); color: #fff; border: none;
+  border-radius: 8px; padding: 10px 20px; font-size: 13px; font-weight: 600;
+  cursor: pointer; display: inline-flex; align-items: center; gap: 8px;
+  margin-top: 16px;
+}
+.rewrite-btn:hover { opacity: 0.9; }
+.rewrite-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.rewrite-container { margin-top: 16px; }
+
+.rewrite-summary {
+  background: linear-gradient(135deg, rgba(245,158,11,0.08), rgba(239,68,68,0.08));
+  border: 1px solid #f59e0b; border-radius: 12px; padding: 20px;
+  margin-bottom: 20px;
+}
+.rewrite-summary-title { color: #f59e0b; font-size: 14px; font-weight: 600; margin-bottom: 8px; }
+.rewrite-summary-text { color: #e5e5e5; font-size: 14px; line-height: 1.6; }
+
+.rewrite-section {
+  background: #141414; border: 1px solid #333; border-radius: 10px;
+  margin-bottom: 16px; overflow: hidden;
+}
+.rewrite-section-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 16px; background: #1a1a1a; border-bottom: 1px solid #333;
+  cursor: pointer;
+}
+.rewrite-section-name {
+  color: #f59e0b; font-weight: 600; font-size: 14px; text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.rewrite-section-toggle { color: #888; font-size: 12px; }
+.rewrite-section-body { padding: 0; }
+.rewrite-section-body.collapsed { display: none; }
+
+.rewrite-columns {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 0;
+}
+@media (max-width: 768px) {
+  .rewrite-columns { grid-template-columns: 1fr; }
+}
+.rewrite-col {
+  padding: 16px; border-right: 1px solid #262626;
+}
+.rewrite-col:last-child { border-right: none; }
+.rewrite-col-label {
+  font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px;
+  font-weight: 600; margin-bottom: 8px;
+}
+.rewrite-col-label.original { color: #888; }
+.rewrite-col-label.rewritten { color: #4ade80; }
+.rewrite-col-text {
+  font-size: 13px; line-height: 1.7; color: #ccc; white-space: pre-wrap;
+}
+.rewrite-explanation {
+  padding: 12px 16px; background: #0f0f0f; border-top: 1px solid #262626;
+}
+.rewrite-explanation-label { color: #7c3aed; font-size: 11px; font-weight: 600; margin-bottom: 4px; }
+.rewrite-explanation-text { color: #aaa; font-size: 12px; line-height: 1.5; }
+.rewrite-principle {
+  margin-top: 4px; font-size: 11px; color: #f59e0b; font-style: italic;
+}
+
+.rewrite-full-toggle {
+  background: #1a1a1a; border: 1px solid #333; border-radius: 8px;
+  color: #e5e5e5; padding: 10px 20px; font-size: 13px; font-weight: 500;
+  cursor: pointer; display: inline-flex; align-items: center; gap: 8px;
+  margin-top: 12px;
+}
+.rewrite-full-toggle:hover { background: #262626; color: #fff; }
+.rewrite-full-script {
+  background: #141414; border: 1px solid #333; border-radius: 10px;
+  padding: 20px; margin-top: 12px; display: none;
+}
+.rewrite-full-script.visible { display: block; }
+.rewrite-full-script-text {
+  font-size: 14px; line-height: 1.8; color: #e5e5e5; white-space: pre-wrap;
+}
+.rewrite-cache-info { display: inline-block; margin-left: 12px; font-size: 12px; color: #888; }
+
+/* Rewrite progress bar (reuses AI progress pattern) */
+.rewrite-progress-wrap { margin-top: 16px; }
+.rewrite-steps {
+  display: flex; justify-content: space-between; gap: 4px; margin-bottom: 14px;
+}
+.rewrite-step {
+  flex: 1; text-align: center; font-size: 11px; color: #555; padding: 6px 2px;
+  border-radius: 4px; transition: all 0.3s;
+}
+.rewrite-step.active { color: #fbbf24; background: rgba(245,158,11,0.1); }
+.rewrite-step.done { color: #4ade80; }
+.rewrite-step-icon { font-size: 16px; display: block; margin-bottom: 2px; }
+
 /* Loading / Error */
 .loading { text-align: center; padding: 60px 20px; color: #888; }
 .spinner {
@@ -366,7 +460,9 @@ let allVideos = [];
 let currentSort = { col: 'score', dir: 'desc' };
 let selectedVideoId = null;
 let aiAvailable = false;
+let rewriteAvailable = false;
 let activeExpertTab = 0;
+let currentAIAnalysis = null; // Store for rewriter access
 
 // ── Init ──
 (function init() {
@@ -377,6 +473,7 @@ let activeExpertTab = 0;
   document.getElementById('date-to').value = fmt(now);
   loadUsage();
   loadAIStatus();
+  loadRewriteStatus();
   loadDashboard();
 })();
 
@@ -400,6 +497,162 @@ async function loadAIStatus() {
     const data = await res.json();
     aiAvailable = data.available;
   } catch { aiAvailable = false; }
+}
+
+async function loadRewriteStatus() {
+  try {
+    const res = await fetch('/api/rewrite-status');
+    const data = await res.json();
+    rewriteAvailable = data.available;
+  } catch { rewriteAvailable = false; }
+}
+
+const REWRITE_STEPS = [
+  { icon: '📋', label: 'Prepare' },
+  { icon: '✍️', label: 'Rewrite' },
+  { icon: '📝', label: 'Format' },
+  { icon: '✅', label: 'Done' },
+];
+
+function renderRewriteProgress(step, totalSteps, label, detail) {
+  const pct = Math.round((step / totalSteps) * 100);
+  return `
+    <div class="ai-loading">
+      <div class="rewrite-progress-wrap">
+        <div class="ai-progress-bar"><div class="ai-progress-fill" style="width:${pct}%;background:linear-gradient(90deg,#f59e0b,#ef4444)"></div></div>
+        <div class="rewrite-steps">
+          ${REWRITE_STEPS.map((s, i) => {
+            const cls = i < step ? 'done' : i === step ? 'active' : '';
+            const icon = i < step ? '✓' : s.icon;
+            return `<div class="rewrite-step ${cls}"><span class="rewrite-step-icon">${icon}</span>${s.label}</div>`;
+          }).join('')}
+        </div>
+        <div class="ai-progress-label">${esc(label)}</div>
+        <div class="ai-progress-detail">${esc(detail || '')}</div>
+      </div>
+    </div>`;
+}
+
+async function loadScriptRewrite(videoId, expertIndex, expertName) {
+  const container = document.getElementById('rewrite-container-' + expertIndex);
+  if (!container) return;
+
+  // Disable the button
+  const btn = document.getElementById('rewrite-btn-' + expertIndex);
+  if (btn) btn.disabled = true;
+
+  // Show initial progress
+  container.innerHTML = renderRewriteProgress(0, 4, 'Starting script rewrite...', 'Connecting to Claude...');
+
+  const from = document.getElementById('date-from').value;
+  const to = document.getElementById('date-to').value;
+
+  try {
+    const url = `/api/videos/${videoId}/rewrite-script?expert=${expertIndex}&from=${from}&to=${to}&stream=1`;
+    const eventSource = new EventSource(url);
+
+    await new Promise((resolve, reject) => {
+      eventSource.addEventListener('progress', (e) => {
+        const d = JSON.parse(e.data);
+        container.innerHTML = renderRewriteProgress(d.step, d.totalSteps, d.label, d.detail);
+      });
+
+      eventSource.addEventListener('complete', (e) => {
+        eventSource.close();
+        const data = JSON.parse(e.data);
+        if (!data.rewrittenScript) {
+          reject(new Error('No rewrite data returned.'));
+          return;
+        }
+        renderRewrittenScript(data, container);
+        resolve();
+      });
+
+      eventSource.addEventListener('error', (e) => {
+        eventSource.close();
+        try {
+          const d = JSON.parse(e.data);
+          reject(new Error(d.error || 'Script rewrite failed'));
+        } catch {
+          reject(new Error('Connection lost during script rewrite.'));
+        }
+      });
+
+      eventSource.onerror = () => {
+        eventSource.close();
+        reject(new Error('Connection lost. Please try again.'));
+      };
+    });
+  } catch (err) {
+    container.innerHTML = `<div class="error-msg">Script Rewrite Error: ${esc(err.message)}</div>`;
+    if (btn) btn.disabled = false;
+  }
+}
+
+function renderRewrittenScript(data, container) {
+  const { rewrittenScript: r, cached, cachedAt } = data;
+
+  const cacheInfo = cached
+    ? `<span class="rewrite-cache-info">Cached ${timeAgo(cachedAt)}</span>`
+    : '';
+
+  const sectionsHtml = r.sections.map((s, i) => `
+    <div class="rewrite-section">
+      <div class="rewrite-section-header" onclick="toggleRewriteSection(${i})">
+        <span class="rewrite-section-name">${esc(s.sectionName)}</span>
+        <span class="rewrite-section-toggle" id="rewrite-toggle-${i}">▼</span>
+      </div>
+      <div class="rewrite-section-body" id="rewrite-body-${i}">
+        <div class="rewrite-columns">
+          <div class="rewrite-col">
+            <div class="rewrite-col-label original">Original Script</div>
+            <div class="rewrite-col-text">${esc(s.originalText)}</div>
+          </div>
+          <div class="rewrite-col">
+            <div class="rewrite-col-label rewritten">Rewritten by ${esc(r.expertName)}</div>
+            <div class="rewrite-col-text">${esc(s.rewrittenText)}</div>
+          </div>
+        </div>
+        <div class="rewrite-explanation">
+          <div class="rewrite-explanation-label">Changes Explained</div>
+          <div class="rewrite-explanation-text">${esc(s.changesExplained)}</div>
+          <div class="rewrite-principle">${esc(s.expertPrinciple)}</div>
+        </div>
+      </div>
+    </div>
+  `).join('');
+
+  container.innerHTML = `
+    <div style="margin-top:16px;">
+      ${cacheInfo}
+      <div class="rewrite-summary">
+        <div class="rewrite-summary-title">Script Rewrite by ${esc(r.expertName)}</div>
+        <div class="rewrite-summary-text">${esc(r.changesSummary)}</div>
+      </div>
+
+      ${sectionsHtml}
+
+      <button class="rewrite-full-toggle" onclick="toggleFullScript()">
+        📄 View Full Rewritten Script
+      </button>
+      <div class="rewrite-full-script" id="rewrite-full-script">
+        <div class="rewrite-full-script-text">${esc(r.fullRewrittenScript)}</div>
+      </div>
+    </div>
+  `;
+}
+
+function toggleRewriteSection(index) {
+  const body = document.getElementById('rewrite-body-' + index);
+  const toggle = document.getElementById('rewrite-toggle-' + index);
+  if (!body || !toggle) return;
+  body.classList.toggle('collapsed');
+  toggle.textContent = body.classList.contains('collapsed') ? '▶' : '▼';
+}
+
+function toggleFullScript() {
+  const el = document.getElementById('rewrite-full-script');
+  if (el) el.classList.toggle('visible');
 }
 
 const AI_STEPS = [
@@ -718,6 +971,7 @@ function renderAIAnalysis(data, container) {
   const { analysis, cached, cachedAt } = data;
   const a = analysis;
   activeExpertTab = 0;
+  currentAIAnalysis = a; // Store for rewriter
 
   const cacheInfo = cached
     ? `<span class="ai-cache-info">Cached ${timeAgo(cachedAt)}</span>`
@@ -785,6 +1039,7 @@ function renderAIAnalysis(data, container) {
 }
 
 function renderExpertPanel(expert, index) {
+  const videoId = selectedVideoId;
   return `
     <div class="expert-panel${index === 0 ? ' active' : ''}" id="exp-panel-${index}">
       <div class="expert-header">
@@ -837,6 +1092,14 @@ function renderExpertPanel(expert, index) {
             <div class="cro-row"><span class="cro-label">How To</span><span class="cro-value">${esc(t.implementation)}</span></div>
           </div>
         `).join('')}
+      </div>` : ''}
+
+      ${rewriteAvailable ? `
+      <div style="margin-top:20px; padding-top:16px; border-top:1px solid #333;">
+        <button class="rewrite-btn" id="rewrite-btn-${index}" onclick="loadScriptRewrite('${videoId}', ${index}, '${esc(expert.expertName)}')">
+          ✍️ Rewrite Script as ${esc(expert.expertName)}
+        </button>
+        <div class="rewrite-container" id="rewrite-container-${index}"></div>
       </div>` : ''}
     </div>
   `;

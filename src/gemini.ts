@@ -210,6 +210,7 @@ export class GeminiAnalyzer {
         overallFlow: "",
       },
       overallVerdict: (parsed.overallVerdict as string) ?? "",
+      transcript: (parsed.transcript as string) ?? "",
     } as ContentAnalysis;
   }
 }
@@ -316,7 +317,8 @@ Respond with a JSON object containing these exact fields:
     "cta": "Analysis of the call-to-action",
     "overallFlow": "Overall script flow assessment and pacing notes"
   },
-  "overallVerdict": "A 2-3 sentence overall verdict summarizing the video's biggest opportunities for improvement"
+  "overallVerdict": "A 2-3 sentence overall verdict summarizing the video's biggest opportunities for improvement",
+  "transcript": "Full word-for-word transcript of everything said in the video. Include all spoken words, narration, and any on-screen text that is read aloud. Preserve the natural flow and paragraph breaks."
 }
 
 IMPORTANT:
@@ -324,5 +326,6 @@ IMPORTANT:
 - Each expert should provide at least 2 specificFixes tied to actual timestamps in the video
 - Each expert MUST include 2-3 unique CRO tests in their "croTests" array, specific to their domain of expertise. Hormozi focuses on offer tests, Georgi on copy tests, Brunson on funnel/story tests, Kennedy on sales psychology tests, Schwartz on awareness/messaging tests. Every test must be different — no duplicate ideas across experts.
 - Be direct and specific. No generic advice. Reference actual content, words, and visuals from the video.
-- All timestamps should be in M:SS format`;
+- All timestamps should be in M:SS format
+- The "transcript" field MUST contain the complete word-for-word transcript of all spoken content in the video. This is critical for downstream script rewriting.`;
 }

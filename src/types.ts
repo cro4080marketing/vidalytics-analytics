@@ -232,6 +232,27 @@ export interface ContentAnalysis {
   timestampAnalysis: TimestampAnalysis[];
   scriptStructure: ScriptStructure;
   overallVerdict: string;
+  transcript: string;
+}
+
+// ── Script Rewriter (Claude) ──
+
+export interface RewrittenScript {
+  videoId: string;
+  expertIndex: number;
+  expertName: string;
+  rewrittenAt: string;
+  sections: RewrittenScriptSection[];
+  fullRewrittenScript: string;
+  changesSummary: string;
+}
+
+export interface RewrittenScriptSection {
+  sectionName: string;
+  originalText: string;
+  rewrittenText: string;
+  changesExplained: string;
+  expertPrinciple: string;
 }
 
 // ── Cache ──
