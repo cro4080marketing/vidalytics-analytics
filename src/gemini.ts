@@ -1,4 +1,6 @@
 import fs from "node:fs";
+import { pipeline } from "node:stream/promises";
+import { Readable } from "node:stream";
 import os from "node:os";
 import path from "node:path";
 import { GoogleGenAI } from "@google/genai";
@@ -60,7 +62,7 @@ export class GeminiAnalyzer {
   ): Promise<ContentAnalysis> {
     console.log(`[Gemini] Downloading video from Vidalytics CDN...`);
 
-    // Download video to temp file first
+    // Stream video to temp file (avoids loading entire video into memory)
     // Vidalytics CDN requires a Referer header to allow downloads
     const tempFile = path.join(os.tmpdir(), `vidalytics-${videoId}.mp4`);
     try {
@@ -73,10 +75,15 @@ export class GeminiAnalyzer {
       if (!videoRes.ok) {
         throw new Error(`Failed to download video: ${videoRes.status} ${videoRes.statusText}`);
       }
-      const buffer = Buffer.from(await videoRes.arrayBuffer());
-      fs.writeFileSync(tempFile, buffer);
-      console.log(`[Gemini] Downloaded ${(buffer.length / 1024 / 1024).toFixed(1)}MB to temp file`);
+      if (!videoRes.body) {
+        throw new Error("No response body from video download");
+      }
+      const fileStream = fs.createWriteStream(tempFile);
+      await pipeline(Readable.fromWeb(videoRes.body as import("node:stream/web").ReadableStream), fileStream);
+      const fileSize = fs.statSync(tempFile).size;
+      console.log(`[Gemini] Downloaded ${(fileSize / 1024 / 1024).toFixed(1)}MB to temp file`);
     } catch (err) {
+      try { fs.unlinkSync(tempFile); } catch { /* cleanup */ }
       throw new Error(`Video download failed: ${err instanceof Error ? err.message : String(err)}`);
     }
 

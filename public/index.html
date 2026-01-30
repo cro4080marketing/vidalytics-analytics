@@ -392,8 +392,13 @@ async function loadAIAnalysis(videoId) {
 
   try {
     const res = await fetch(`/api/videos/${videoId}/content-analysis?from=${from}&to=${to}`);
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}));
+      throw new Error(errData.error || `Server error: ${res.status}`);
+    }
     const data = await res.json();
     if (data.error) throw new Error(data.error);
+    if (!data.analysis) throw new Error('No analysis data returned. The video may be too large for the server to process. Try a shorter video.');
     renderAIAnalysis(data, container);
   } catch (err) {
     container.innerHTML = `<div class="error-msg">AI Analysis Error: ${esc(err.message)}</div>`;
