@@ -394,6 +394,50 @@ tr.selected { background: #1a2332; }
 }
 .rewrite-cache-info { display: inline-block; margin-left: 12px; font-size: 12px; color: #888; }
 
+/* Generate CRO Tests */
+.generate-cro-btn {
+  background: linear-gradient(135deg, #10b981, #3b82f6); color: #fff; border: none;
+  border-radius: 8px; padding: 10px 20px; font-size: 13px; font-weight: 600;
+  cursor: pointer; display: inline-flex; align-items: center; gap: 8px;
+  margin-top: 16px;
+}
+.generate-cro-btn:hover { opacity: 0.9; }
+.generate-cro-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.generated-batches { margin-top: 16px; }
+.generated-batch {
+  margin-bottom: 16px; border: 1px solid #333; border-radius: 10px; overflow: hidden;
+}
+.generated-batch-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 16px; background: #141414; border-bottom: 1px solid #333;
+  cursor: pointer;
+}
+.generated-batch-title {
+  color: #10b981; font-weight: 600; font-size: 13px;
+  display: flex; align-items: center; gap: 8px;
+}
+.generated-batch-toggle { color: #888; font-size: 12px; }
+.generated-batch-body { padding: 0; }
+.generated-batch-body.collapsed { display: none; }
+
+.new-badge {
+  display: inline-block; background: rgba(16,185,129,0.15); color: #10b981;
+  padding: 2px 8px; border-radius: 4px; font-size: 10px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.5px;
+}
+
+.cro-gen-steps {
+  display: flex; justify-content: space-between; gap: 4px; margin-bottom: 14px;
+}
+.cro-gen-step {
+  flex: 1; text-align: center; font-size: 11px; color: #555; padding: 6px 2px;
+  border-radius: 4px; transition: all 0.3s;
+}
+.cro-gen-step.active { color: #6ee7b7; background: rgba(16,185,129,0.1); }
+.cro-gen-step.done { color: #4ade80; }
+.cro-gen-step-icon { font-size: 16px; display: block; margin-bottom: 2px; }
+
 /* Rewrite progress bar (reuses AI progress pattern) */
 .rewrite-progress-wrap { margin-top: 16px; }
 .rewrite-steps {
@@ -463,6 +507,7 @@ let aiAvailable = false;
 let rewriteAvailable = false;
 let activeExpertTab = 0;
 let currentAIAnalysis = null; // Store for rewriter access
+let generatedCROBatches = {}; // { 'expert0': [batch1, batch2, ...] }
 
 // ── Init ──
 (function init() {
@@ -531,6 +576,155 @@ function renderRewriteProgress(step, totalSteps, label, detail) {
         <div class="ai-progress-detail">${esc(detail || '')}</div>
       </div>
     </div>`;
+}
+
+const CRO_GEN_STEPS = [
+  { icon: '📋', label: 'Prepare' },
+  { icon: '🧪', label: 'Generate' },
+  { icon: '✅', label: 'Done' },
+];
+
+function renderCROGenProgress(step, totalSteps, label, detail) {
+  const pct = Math.round((step / totalSteps) * 100);
+  return `
+    <div class="ai-loading">
+      <div style="margin-top:16px;">
+        <div class="ai-progress-bar"><div class="ai-progress-fill" style="width:${pct}%;background:linear-gradient(90deg,#10b981,#3b82f6)"></div></div>
+        <div class="cro-gen-steps">
+          ${CRO_GEN_STEPS.map((s, i) => {
+            const cls = i < step ? 'done' : i === step ? 'active' : '';
+            const icon = i < step ? '✓' : s.icon;
+            return `<div class="cro-gen-step ${cls}"><span class="cro-gen-step-icon">${icon}</span>${s.label}</div>`;
+          }).join('')}
+        </div>
+        <div class="ai-progress-label">${esc(label)}</div>
+        <div class="ai-progress-detail">${esc(detail || '')}</div>
+      </div>
+    </div>`;
+}
+
+async function loadNewCROTests(videoId, expertIndex, expertName) {
+  const container = document.getElementById('cro-gen-container-' + expertIndex);
+  if (!container) return;
+
+  const btn = document.getElementById('cro-gen-btn-' + expertIndex);
+  if (btn) btn.disabled = true;
+
+  const progressEl = document.getElementById('cro-gen-progress-' + expertIndex);
+  if (progressEl) {
+    progressEl.innerHTML = renderCROGenProgress(0, 3, 'Starting...', 'Connecting to Claude...');
+  }
+
+  const from = document.getElementById('date-from').value;
+  const to = document.getElementById('date-to').value;
+
+  try {
+    const url = `/api/videos/${videoId}/generate-cro-tests?expert=${expertIndex}&from=${from}&to=${to}&stream=1`;
+    const eventSource = new EventSource(url);
+
+    await new Promise((resolve, reject) => {
+      eventSource.addEventListener('progress', (e) => {
+        const d = JSON.parse(e.data);
+        if (progressEl) {
+          progressEl.innerHTML = renderCROGenProgress(d.step, d.totalSteps, d.label, d.detail);
+        }
+      });
+
+      eventSource.addEventListener('complete', (e) => {
+        eventSource.close();
+        const data = JSON.parse(e.data);
+        if (!data.generatedTests) {
+          reject(new Error('No test data returned.'));
+          return;
+        }
+
+        const key = 'expert' + expertIndex;
+        if (!generatedCROBatches[key]) generatedCROBatches[key] = [];
+        generatedCROBatches[key].push(data.generatedTests);
+
+        renderGeneratedBatches(expertIndex);
+
+        if (progressEl) progressEl.innerHTML = '';
+        if (btn) btn.disabled = false;
+        resolve();
+      });
+
+      eventSource.addEventListener('error', (e) => {
+        eventSource.close();
+        try {
+          const d = JSON.parse(e.data);
+          reject(new Error(d.error || 'CRO test generation failed'));
+        } catch {
+          reject(new Error('Connection lost during CRO test generation.'));
+        }
+      });
+
+      eventSource.onerror = () => {
+        eventSource.close();
+        reject(new Error('Connection lost. Please try again.'));
+      };
+    });
+  } catch (err) {
+    if (progressEl) progressEl.innerHTML = `<div class="error-msg">CRO Generation Error: ${esc(err.message)}</div>`;
+    if (btn) btn.disabled = false;
+  }
+}
+
+function renderGeneratedBatches(expertIndex) {
+  const container = document.getElementById('cro-gen-container-' + expertIndex);
+  if (!container) return;
+
+  const key = 'expert' + expertIndex;
+  const batches = generatedCROBatches[key] || [];
+
+  if (batches.length === 0) {
+    container.innerHTML = '';
+    return;
+  }
+
+  const reversedBatches = [...batches].reverse();
+
+  container.innerHTML = `
+    <div class="generated-batches">
+      ${reversedBatches.map((batch, displayIdx) => {
+        const isNewest = displayIdx === 0;
+        return `
+          <div class="generated-batch">
+            <div class="generated-batch-header" onclick="toggleGeneratedBatch(${expertIndex}, ${batch.batchNumber})">
+              <div class="generated-batch-title">
+                <span class="new-badge">NEW</span>
+                Batch #${batch.batchNumber} — ${batch.tests.length} Tests
+                <span style="color:#888;font-size:11px;font-weight:400;">(${timeAgo(new Date(batch.generatedAt).getTime())})</span>
+              </div>
+              <span class="generated-batch-toggle" id="cro-batch-toggle-${expertIndex}-${batch.batchNumber}">${isNewest ? '▼' : '▶'}</span>
+            </div>
+            <div class="generated-batch-body${isNewest ? '' : ' collapsed'}" id="cro-batch-body-${expertIndex}-${batch.batchNumber}">
+              <div style="padding:12px;">
+                ${batch.tests.map(t => `
+                  <div class="cro-card" style="border-left:3px solid #10b981;">
+                    <div class="cro-name">${esc(t.testName)}</div>
+                    <div class="cro-row"><span class="cro-label">Hypothesis</span><span class="cro-value">${esc(t.hypothesis)}</span></div>
+                    <div class="cro-row"><span class="cro-label">Control</span><span class="cro-value">${esc(t.control)}</span></div>
+                    <div class="cro-row"><span class="cro-label">Variant</span><span class="cro-value">${esc(t.variant)}</span></div>
+                    <div class="cro-row"><span class="cro-label">Impact</span><span class="cro-value">${esc(t.expectedImpact)}</span></div>
+                    <div class="cro-row"><span class="cro-label">How To</span><span class="cro-value">${esc(t.implementation)}</span></div>
+                  </div>
+                `).join('')}
+              </div>
+            </div>
+          </div>
+        `;
+      }).join('')}
+    </div>
+  `;
+}
+
+function toggleGeneratedBatch(expertIndex, batchNumber) {
+  const body = document.getElementById('cro-batch-body-' + expertIndex + '-' + batchNumber);
+  const toggle = document.getElementById('cro-batch-toggle-' + expertIndex + '-' + batchNumber);
+  if (!body || !toggle) return;
+  body.classList.toggle('collapsed');
+  toggle.textContent = body.classList.contains('collapsed') ? '▶' : '▼';
 }
 
 async function loadScriptRewrite(videoId, expertIndex, expertName) {
@@ -972,6 +1166,7 @@ function renderAIAnalysis(data, container) {
   const a = analysis;
   activeExpertTab = 0;
   currentAIAnalysis = a; // Store for rewriter
+  generatedCROBatches = {}; // Reset generated batches for new analysis
 
   const cacheInfo = cached
     ? `<span class="ai-cache-info">Cached ${timeAgo(cachedAt)}</span>`
@@ -1092,6 +1287,15 @@ function renderExpertPanel(expert, index) {
             <div class="cro-row"><span class="cro-label">How To</span><span class="cro-value">${esc(t.implementation)}</span></div>
           </div>
         `).join('')}
+      </div>` : ''}
+
+      ${rewriteAvailable ? `
+      <div style="margin-top:16px; padding-top:16px; border-top:1px solid #262626;">
+        <button class="generate-cro-btn" id="cro-gen-btn-${index}" onclick="loadNewCROTests('${videoId}', ${index}, '${esc(expert.expertName)}')">
+          🧪 Generate New Split Test Ideas
+        </button>
+        <div id="cro-gen-progress-${index}"></div>
+        <div id="cro-gen-container-${index}"></div>
       </div>` : ''}
 
       ${rewriteAvailable ? `

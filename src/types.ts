@@ -255,6 +255,18 @@ export interface RewrittenScriptSection {
   expertPrinciple: string;
 }
 
+// ── Generated CRO Tests (Claude) ──
+
+export interface GeneratedCROTests {
+  videoId: string;
+  expertIndex: number;
+  expertName: string;
+  generatedAt: string;
+  batchNumber: number;
+  tests: CROTest[];
+  previousTestNames: string[];
+}
+
 // ── Cache ──
 
 export interface CacheEntry<T> {

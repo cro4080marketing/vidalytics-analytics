@@ -12,8 +12,8 @@ import {
   ratingFromScore,
   findSignificantDrops,
 } from "./analyzer.js";
-import type { VideoStats, ContentAnalysis } from "./types.js";
-import { cacheKey, readCacheWithMeta } from "./cache.js";
+import type { VideoStats, ContentAnalysis, GeneratedCROTests } from "./types.js";
+import { cacheKey, readCache, readCacheWithMeta } from "./cache.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -373,6 +373,130 @@ app.get("/api/videos/:id/rewrite-script", async (req, res) => {
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       console.error(`[Script Rewrite Error] ${msg}`);
+      res.status(500).json({ error: msg });
+    }
+  }
+});
+
+// ── Generate New CRO Tests (Claude) ──
+
+app.get("/api/videos/:id/generate-cro-tests", async (req, res) => {
+  if (!claude) {
+    res.status(503).json({ error: "CRO test generation not available. Add ANTHROPIC_API_KEY to .env." });
+    return;
+  }
+
+  const videoId = req.params.id;
+  const expertIndex = parseInt((req.query.expert as string) || "0", 10);
+  const wantSSE = req.query.stream === "1";
+
+  // Load the cached AI analysis (must exist already)
+  const analysisKey = cacheKey(`ai-analysis-${videoId}`, {});
+  const cachedAnalysis = readCacheWithMeta<ContentAnalysis>(analysisKey);
+
+  if (!cachedAnalysis) {
+    const errMsg = "AI analysis must be run first. Click the AI Analysis button before generating new tests.";
+    if (wantSSE) {
+      res.writeHead(200, { "Content-Type": "text/event-stream", "Cache-Control": "no-cache", Connection: "keep-alive" });
+      res.write(`event: error\ndata: ${JSON.stringify({ error: errMsg })}\n\n`);
+      res.end();
+    } else {
+      res.status(400).json({ error: errMsg });
+    }
+    return;
+  }
+
+  const analysis = cachedAnalysis.data;
+  const expert = analysis.expertFeedback[expertIndex];
+
+  if (!expert) {
+    const errMsg = `Expert index ${expertIndex} not found.`;
+    if (wantSSE) {
+      res.writeHead(200, { "Content-Type": "text/event-stream", "Cache-Control": "no-cache", Connection: "keep-alive" });
+      res.write(`event: error\ndata: ${JSON.stringify({ error: errMsg })}\n\n`);
+      res.end();
+    } else {
+      res.status(400).json({ error: errMsg });
+    }
+    return;
+  }
+
+  if (!analysis.transcript) {
+    const errMsg = "No transcript available. Re-run the AI analysis to generate a transcript.";
+    if (wantSSE) {
+      res.writeHead(200, { "Content-Type": "text/event-stream", "Cache-Control": "no-cache", Connection: "keep-alive" });
+      res.write(`event: error\ndata: ${JSON.stringify({ error: errMsg })}\n\n`);
+      res.end();
+    } else {
+      res.status(400).json({ error: errMsg });
+    }
+    return;
+  }
+
+  // Collect all existing test names (original Gemini + all previous batches)
+  const allPreviousTestNames: string[] = [];
+  if (expert.croTests) {
+    for (const t of expert.croTests) {
+      allPreviousTestNames.push(t.testName);
+    }
+  }
+
+  // Scan for previously generated batches
+  let nextBatch = 1;
+  while (true) {
+    const batchKey = cacheKey(`new-cro-tests-${videoId}-expert${expertIndex}-batch${nextBatch}`, {});
+    const existingBatch = readCache<GeneratedCROTests>(batchKey);
+    if (!existingBatch) break;
+    for (const t of existingBatch.tests) {
+      allPreviousTestNames.push(t.testName);
+    }
+    nextBatch++;
+  }
+
+  if (wantSSE) {
+    res.writeHead(200, { "Content-Type": "text/event-stream", "Cache-Control": "no-cache", Connection: "keep-alive" });
+
+    const sendEvent = (event: string, data: unknown) => {
+      res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+    };
+
+    const onProgress = (step: number, totalSteps: number, label: string, detail?: string) => {
+      sendEvent("progress", { step, totalSteps, label, detail: detail ?? "" });
+    };
+
+    try {
+      const result = await claude.generateCROTests(
+        videoId, expertIndex, analysis.transcript, expert,
+        allPreviousTestNames, nextBatch, onProgress
+      );
+
+      sendEvent("complete", {
+        generatedTests: result.generatedTests,
+        cached: result.cached,
+        cachedAt: result.cachedAt ?? null,
+        batchNumber: nextBatch,
+      });
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error(`[CRO Test Generation Error] ${msg}`);
+      sendEvent("error", { error: msg });
+    }
+    res.end();
+  } else {
+    try {
+      const result = await claude.generateCROTests(
+        videoId, expertIndex, analysis.transcript, expert,
+        allPreviousTestNames, nextBatch
+      );
+      res.json({
+        generatedTests: result.generatedTests,
+        cached: result.cached,
+        cachedAt: result.cachedAt ?? null,
+        batchNumber: nextBatch,
+      });
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error(`[CRO Test Generation Error] ${msg}`);
       res.status(500).json({ error: msg });
     }
   }
