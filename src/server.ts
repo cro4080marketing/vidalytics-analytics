@@ -46,11 +46,14 @@ app.get("/api/videos", async (req, res) => {
 
     const videos = await client.listVideos();
 
-    // Fetch stats for all videos (in batches to avoid hammering the API)
-    const statsPromises = videos.map((v) =>
-      client.getVideoStats(v.id, dateFrom, dateTo).catch(() => null)
+    // Fetch stats in batches of 5 with 500ms delay to avoid rate limits
+    const allStats = await fetchInBatches(
+      videos.map((v) => () =>
+        client.getVideoStats(v.id, dateFrom, dateTo).catch(() => null)
+      ),
+      5,
+      500
     );
-    const allStats = await Promise.all(statsPromises);
 
     const results = videos.map((video, i) => {
       const stats = allStats[i];
@@ -108,10 +111,14 @@ app.get("/api/summary", async (req, res) => {
 
     const videos = await client.listVideos();
 
-    const statsPromises = videos.map((v) =>
-      client.getVideoStats(v.id, dateFrom, dateTo).catch(() => null)
+    // Fetch stats in batches of 5 with 500ms delay to avoid rate limits
+    const allStatsRaw = await fetchInBatches(
+      videos.map((v) => () =>
+        client.getVideoStats(v.id, dateFrom, dateTo).catch(() => null)
+      ),
+      5,
+      500
     );
-    const allStatsRaw = await Promise.all(statsPromises);
     const allStats = allStatsRaw.filter((s): s is VideoStats => s !== null);
 
     const summary = analyzePortfolio(videos, allStats);
@@ -211,6 +218,25 @@ app.listen(port, () => {
 });
 
 // ── Helpers ──
+
+/** Run promises in sequential batches to avoid API rate limits */
+async function fetchInBatches<T>(
+  items: Array<() => Promise<T>>,
+  batchSize: number = 5,
+  delayMs: number = 500
+): Promise<T[]> {
+  const results: T[] = [];
+  for (let i = 0; i < items.length; i += batchSize) {
+    const batch = items.slice(i, i + batchSize);
+    const batchResults = await Promise.all(batch.map((fn) => fn()));
+    results.push(...batchResults);
+    // Delay between batches (skip after the last batch)
+    if (i + batchSize < items.length) {
+      await new Promise((r) => setTimeout(r, delayMs));
+    }
+  }
+  return results;
+}
 
 function defaultDateFrom(): string {
   const d = new Date();

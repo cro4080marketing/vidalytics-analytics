@@ -47,20 +47,26 @@ export class VidalyticsClient {
     });
 
     if (res.status === 429) {
-      // Rate limited — wait 5s and retry once
-      await new Promise((r) => setTimeout(r, 5000));
-      const retry = await fetch(url.toString(), {
-        headers: {
-          Accept: "application/json",
-          "X-API-Key": this.apiToken,
-        },
-      });
-      if (!retry.ok) {
-        throw new Error(`Vidalytics API rate limited (429) after retry: ${await retry.text()}`);
+      // Rate limited — exponential backoff with up to 3 retries
+      for (let attempt = 1; attempt <= 3; attempt++) {
+        const delay = 2000 * Math.pow(2, attempt); // 4s, 8s, 16s
+        await new Promise((r) => setTimeout(r, delay));
+        const retry = await fetch(url.toString(), {
+          headers: {
+            Accept: "application/json",
+            "X-API-Key": this.apiToken,
+          },
+        });
+        if (retry.ok) {
+          const data = (await retry.json()) as ApiResponse<T>;
+          writeCache(key, data.content, options?.cacheTtl ?? DEFAULT_TTL);
+          return data.content;
+        }
+        if (retry.status !== 429) {
+          throw new Error(`Vidalytics API error ${retry.status}: ${await retry.text()}`);
+        }
       }
-      const data = (await retry.json()) as ApiResponse<T>;
-      writeCache(key, data.content, options?.cacheTtl ?? DEFAULT_TTL);
-      return data.content;
+      throw new Error(`Vidalytics API rate limited (429) after 3 retries for ${endpoint}`);
     }
 
     if (!res.ok) {
