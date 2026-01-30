@@ -485,7 +485,20 @@ tr.selected { background: #1a2332; }
   padding: 16px; color: #fca5a5; margin-bottom: 24px;
 }
 .hidden { display: none; }
+
+/* Report Download Button */
+.report-btn {
+  background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+  color: #fff; border: none; border-radius: 8px;
+  padding: 8px 20px; font-size: 13px; font-weight: 600;
+  cursor: pointer; display: inline-flex; align-items: center; gap: 6px;
+  margin-left: auto; white-space: nowrap;
+}
+.report-btn:hover { opacity: 0.9; }
+.report-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 </style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.2/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.4/jspdf.plugin.autotable.min.js"></script>
 </head>
 <body>
 <div class="container">
@@ -530,6 +543,7 @@ let activeExpertTab = 0;
 let currentAIAnalysis = null; // Store for rewriter access
 let generatedCROBatches = {}; // { 'expert0': [batch1, batch2, ...] }
 let videoContexts = {}; // { 'videoId': 'context text' }
+let currentVideoDetail = null; // { analysis, dropOff, stats } for report
 
 // ── Init ──
 (function init() {
@@ -1103,6 +1117,7 @@ async function selectVideo(id) {
 }
 
 function renderDetail(data) {
+  currentVideoDetail = data;
   const { analysis, dropOff, stats } = data;
   const a = analysis;
   const content = document.getElementById('detail-content');
@@ -1112,6 +1127,7 @@ function renderDetail(data) {
       <button class="back-btn" onclick="closeDetail()">← Back to Dashboard</button>
       <div class="detail-score badge badge-${a.overallRating}">${a.overallScore}/100</div>
       <div class="detail-title">${esc(a.videoName)}</div>
+      <button class="report-btn" onclick="generateReport()" id="report-download-btn">Download Client Report</button>
     </div>
 
     <div class="metrics-grid">
@@ -1384,6 +1400,504 @@ function timeAgo(ts) {
   if (hrs < 24) return `${hrs}h ago`;
   const days = Math.floor(hrs / 24);
   return `${days}d ago`;
+}
+
+// ── PDF Report Generation ──
+
+const PDF_COLORS = {
+  primary:     [59, 130, 246],
+  secondary:   [124, 58, 237],
+  dark:        [15, 15, 15],
+  text:        [51, 51, 51],
+  textLight:   [136, 136, 136],
+  white:       [255, 255, 255],
+  bgLight:     [248, 250, 252],
+  excellent:   [34, 197, 94],
+  good:        [59, 130, 246],
+  average:     [200, 160, 20],
+  poor:        [251, 146, 60],
+  critical:    [220, 80, 80],
+  tableBorder: [226, 232, 240],
+  tableHeader: [30, 41, 59],
+  emerald:     [16, 185, 129],
+};
+
+function ratingColor(rating) {
+  return PDF_COLORS[rating] || PDF_COLORS.text;
+}
+
+function fmtPct(val) {
+  if (val == null) return 'N/A';
+  return val < 1 ? (val * 100).toFixed(1) + '%' : val.toFixed(1) + '%';
+}
+
+function sanitizeFn(str) {
+  return str.replace(/[^a-zA-Z0-9_\- ]/g, '').substring(0, 50).trim().replace(/\s+/g, '_');
+}
+
+function generateReport() {
+  const btn = document.getElementById('report-download-btn');
+  if (!currentVideoDetail) { alert('No video data loaded.'); return; }
+  if (btn) { btn.disabled = true; btn.textContent = 'Generating...'; }
+
+  try {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+    const PW = 210, PH = 297, M = 15, CW = PW - 2 * M;
+    let y = M;
+
+    const { analysis: a, dropOff, stats } = currentVideoDetail;
+    const ai = currentAIAnalysis;
+
+    function needPage(needed) {
+      if (y + needed > PH - 20) { doc.addPage(); y = M; }
+    }
+
+    function sectionTitle(title) {
+      needPage(18);
+      doc.setFontSize(15); doc.setFont('helvetica', 'bold');
+      doc.setTextColor(...PDF_COLORS.dark);
+      doc.text(title, M, y); y += 3;
+      doc.setDrawColor(...PDF_COLORS.primary);
+      doc.setLineWidth(0.5);
+      doc.line(M, y, M + CW, y); y += 7;
+    }
+
+    function subTitle(title) {
+      needPage(10);
+      doc.setFontSize(11); doc.setFont('helvetica', 'bold');
+      doc.setTextColor(...PDF_COLORS.secondary);
+      doc.text(title, M, y); y += 6;
+    }
+
+    function bodyText(text, indent) {
+      const ind = indent || 0;
+      doc.setFontSize(9); doc.setFont('helvetica', 'normal');
+      doc.setTextColor(...PDF_COLORS.text);
+      const lines = doc.splitTextToSize(text, CW - ind);
+      needPage(lines.length * 4 + 2);
+      doc.text(lines, M + ind, y);
+      y += lines.length * 4 + 2;
+    }
+
+    // ===== SECTION 1: COVER =====
+    doc.setFillColor(...PDF_COLORS.primary);
+    doc.rect(0, 0, PW, 48, 'F');
+    // Accent stripe
+    doc.setFillColor(...PDF_COLORS.secondary);
+    doc.rect(0, 48, PW, 3, 'F');
+
+    doc.setTextColor(...PDF_COLORS.white);
+    doc.setFontSize(26); doc.setFont('helvetica', 'bold');
+    doc.text('Video Performance Report', M, 20);
+
+    doc.setFontSize(13); doc.setFont('helvetica', 'normal');
+    const titleLines = doc.splitTextToSize(a.videoName, CW - 40);
+    doc.text(titleLines, M, 30);
+
+    doc.setFontSize(10);
+    doc.text('Analysis Date: ' + new Date().toLocaleDateString('en-US', { year:'numeric', month:'long', day:'numeric' }), M, 42);
+
+    // Score badge
+    const sx = PW - M - 14;
+    doc.setFillColor(...ratingColor(a.overallRating));
+    doc.circle(sx, 22, 13, 'F');
+    doc.setTextColor(...PDF_COLORS.white);
+    doc.setFontSize(18); doc.setFont('helvetica', 'bold');
+    doc.text(String(a.overallScore), sx, 24, { align: 'center' });
+    doc.setFontSize(7);
+    doc.text('/ 100', sx, 30, { align: 'center' });
+
+    y = 58;
+
+    // ===== SECTION 2: EXECUTIVE SUMMARY =====
+    sectionTitle('Executive Summary');
+
+    // Score bar
+    doc.setFillColor(230, 230, 230);
+    doc.roundedRect(M, y, CW, 7, 2, 2, 'F');
+    const fillW = (a.overallScore / 100) * CW;
+    doc.setFillColor(...ratingColor(a.overallRating));
+    doc.roundedRect(M, y, Math.max(fillW, 4), 7, 2, 2, 'F');
+    doc.setFontSize(8); doc.setFont('helvetica', 'bold');
+    doc.setTextColor(...PDF_COLORS.white);
+    if (fillW > 30) doc.text(a.overallRating.toUpperCase() + ' (' + a.overallScore + '/100)', M + 4, y + 5);
+    y += 12;
+
+    // Key metrics table
+    doc.autoTable({
+      startY: y,
+      head: [['Metric', 'Value', 'Rating']],
+      body: [
+        ['Play Rate', fmtPct(a.metrics.playRate.value), a.metrics.playRate.rating.toUpperCase()],
+        ['Engagement', fmtPct(a.metrics.engagement.value), a.metrics.engagement.rating.toUpperCase()],
+        ['Conversion Rate', fmtPct(a.metrics.conversionRate.value), a.metrics.conversionRate.rating.toUpperCase()],
+        ['Unmute Rate', fmtPct(a.metrics.unmuteRate.value), a.metrics.unmuteRate.rating.toUpperCase()],
+      ],
+      theme: 'grid',
+      styles: { fontSize: 10, cellPadding: 4, lineColor: PDF_COLORS.tableBorder },
+      headStyles: { fillColor: PDF_COLORS.tableHeader, textColor: PDF_COLORS.white, fontStyle: 'bold' },
+      didParseCell: function(data) {
+        if (data.column.index === 2 && data.section === 'body') {
+          const r = data.cell.raw.toLowerCase();
+          data.cell.styles.textColor = ratingColor(r);
+          data.cell.styles.fontStyle = 'bold';
+        }
+      },
+      margin: { left: M, right: M },
+    });
+    y = doc.lastAutoTable.finalY + 10;
+
+    // ===== SECTION 3: DETAILED PERFORMANCE METRICS =====
+    sectionTitle('Detailed Performance Metrics');
+
+    const metricsBody = [
+      ['Total Impressions', (stats.impressions || 0).toLocaleString()],
+      ['Total Plays', (stats.plays || 0).toLocaleString()],
+      ['Unique Plays', (stats.playsUnique || 0).toLocaleString()],
+      ['Play Rate', fmtPct(stats.playRate)],
+      ['Unique Play Rate', fmtPct(stats.uniquePlayRate)],
+      ['Engagement', fmtPct(stats.engagement)],
+      ['Unmute Rate', fmtPct(stats.unmuteRate)],
+      ['Unmute Count', (stats.unmuteCount || 0).toLocaleString()],
+      ['Conversions', (stats.conversionCount || 0).toLocaleString()],
+      ['Conversion Rate', fmtPct(stats.conversionRate)],
+      ['Revenue', '$' + (stats.revenue || 0).toFixed(2)],
+      ['Revenue per Viewer', '$' + (stats.revenuePerViewer || 0).toFixed(2)],
+      ['Avg Revenue per Conversion', '$' + (stats.revenueAverage || 0).toFixed(2)],
+    ];
+    doc.autoTable({
+      startY: y,
+      head: [['Metric', 'Value']],
+      body: metricsBody,
+      theme: 'striped',
+      styles: { fontSize: 10, cellPadding: 4, lineColor: PDF_COLORS.tableBorder },
+      headStyles: { fillColor: PDF_COLORS.tableHeader, textColor: PDF_COLORS.white, fontStyle: 'bold' },
+      alternateRowStyles: { fillColor: PDF_COLORS.bgLight },
+      margin: { left: M, right: M },
+    });
+    y = doc.lastAutoTable.finalY + 10;
+
+    // ===== SECTION 4: VIEWER RETENTION =====
+    if (a.significantDrops && a.significantDrops.length > 0) {
+      sectionTitle('Significant Drop-off Points');
+      doc.setFontSize(9); doc.setFont('helvetica', 'normal');
+      doc.setTextColor(...PDF_COLORS.textLight);
+      doc.text('Points where viewers leave the video at above-normal rates', M, y);
+      y += 6;
+
+      doc.autoTable({
+        startY: y,
+        head: [['Time', 'Viewers Before', 'Viewers After', 'Drop %', 'Severity']],
+        body: a.significantDrops.map(d => [
+          d.formattedTime,
+          d.viewersBefore.toLocaleString(),
+          d.viewersAfter.toLocaleString(),
+          '-' + (d.dropPercentage || 0).toFixed(1) + '%',
+          d.severity.toUpperCase(),
+        ]),
+        theme: 'grid',
+        styles: { fontSize: 9, cellPadding: 4, lineColor: PDF_COLORS.tableBorder },
+        headStyles: { fillColor: PDF_COLORS.tableHeader, textColor: PDF_COLORS.white, fontStyle: 'bold' },
+        didParseCell: function(data) {
+          if (data.column.index === 3 && data.section === 'body') {
+            data.cell.styles.textColor = PDF_COLORS.critical;
+            data.cell.styles.fontStyle = 'bold';
+          }
+          if (data.column.index === 4 && data.section === 'body') {
+            data.cell.styles.textColor = ratingColor(data.cell.raw.toLowerCase());
+            data.cell.styles.fontStyle = 'bold';
+          }
+        },
+        margin: { left: M, right: M },
+      });
+      y = doc.lastAutoTable.finalY + 10;
+    }
+
+    // ===== SECTION 5: RECOMMENDATIONS =====
+    if (a.recommendations && a.recommendations.length > 0) {
+      sectionTitle('Recommendations');
+
+      const groups = { critical: [], warning: [], suggestion: [], positive: [] };
+      a.recommendations.forEach(r => { if (groups[r.type]) groups[r.type].push(r); });
+
+      const typeLabels = { critical: 'Critical Issues', warning: 'Warnings', suggestion: 'Suggestions', positive: 'Strengths' };
+      const typeColors = { critical: PDF_COLORS.critical, warning: PDF_COLORS.poor, suggestion: PDF_COLORS.primary, positive: PDF_COLORS.excellent };
+
+      for (const [type, recs] of Object.entries(groups)) {
+        if (recs.length === 0) continue;
+        needPage(15);
+
+        // Type label with colored bar
+        doc.setFillColor(...typeColors[type]);
+        doc.rect(M, y, 3, 6, 'F');
+        doc.setTextColor(...PDF_COLORS.dark);
+        doc.setFontSize(12); doc.setFont('helvetica', 'bold');
+        doc.text(typeLabels[type], M + 6, y + 5);
+        y += 10;
+
+        recs.forEach(r => {
+          needPage(25);
+          doc.setFontSize(10); doc.setFont('helvetica', 'bold');
+          doc.setTextColor(...PDF_COLORS.dark);
+          doc.text(r.title, M + 4, y); y += 5;
+
+          doc.setFontSize(9); doc.setFont('helvetica', 'normal');
+          doc.setTextColor(...PDF_COLORS.text);
+          const dl = doc.splitTextToSize(r.detail, CW - 8);
+          needPage(dl.length * 4 + 2);
+          doc.text(dl, M + 4, y); y += dl.length * 4 + 2;
+
+          doc.setTextColor(...PDF_COLORS.primary);
+          doc.setFont('helvetica', 'italic');
+          const al = doc.splitTextToSize('Action: ' + r.actionableStep, CW - 8);
+          needPage(al.length * 4 + 2);
+          doc.text(al, M + 4, y); y += al.length * 4 + 6;
+        });
+      }
+      y += 5;
+    }
+
+    // ===== AI SECTIONS (6-9) — only if AI analysis was run =====
+    if (ai) {
+
+      // ===== SECTION 6: EXPERT ANALYSIS =====
+      doc.addPage(); y = M;
+
+      // Purple header bar
+      doc.setFillColor(...PDF_COLORS.secondary);
+      doc.rect(0, 0, PW, 14, 'F');
+      doc.setTextColor(...PDF_COLORS.white);
+      doc.setFontSize(16); doc.setFont('helvetica', 'bold');
+      doc.text('Expert Analysis', M, 10);
+      y = 20;
+
+      // Overall Verdict
+      if (ai.overallVerdict) {
+        subTitle('Overall Verdict');
+        bodyText(ai.overallVerdict);
+        y += 4;
+      }
+
+      // Each expert
+      ai.expertFeedback.forEach((expert, i) => {
+        needPage(50);
+
+        // Expert header bar
+        doc.setFillColor(...PDF_COLORS.secondary);
+        doc.roundedRect(M, y, CW, 9, 2, 2, 'F');
+        doc.setTextColor(...PDF_COLORS.white);
+        doc.setFontSize(11); doc.setFont('helvetica', 'bold');
+        doc.text(expert.expertName + '  —  ' + expert.expertRole, M + 4, y + 6.5);
+        y += 13;
+
+        // Assessment
+        bodyText(expert.overallAssessment, 2);
+        y += 2;
+
+        // Strengths & Weaknesses table
+        const maxLen = Math.max(expert.strengths.length, expert.weaknesses.length);
+        if (maxLen > 0) {
+          const rows = [];
+          for (let j = 0; j < maxLen; j++) {
+            rows.push([
+              expert.strengths[j] ? '+ ' + expert.strengths[j] : '',
+              expert.weaknesses[j] ? '- ' + expert.weaknesses[j] : '',
+            ]);
+          }
+          doc.autoTable({
+            startY: y,
+            head: [['Strengths', 'Weaknesses']],
+            body: rows,
+            theme: 'grid',
+            styles: { fontSize: 9, cellPadding: 3, lineColor: PDF_COLORS.tableBorder, overflow: 'linebreak' },
+            headStyles: { fillColor: PDF_COLORS.tableHeader, textColor: PDF_COLORS.white },
+            columnStyles: {
+              0: { textColor: PDF_COLORS.excellent },
+              1: { textColor: PDF_COLORS.critical },
+            },
+            margin: { left: M, right: M },
+          });
+          y = doc.lastAutoTable.finalY + 4;
+        }
+
+        // Priority Action box
+        needPage(16);
+        doc.setFillColor(245, 243, 255);
+        doc.roundedRect(M, y, CW, 14, 2, 2, 'F');
+        doc.setDrawColor(...PDF_COLORS.secondary);
+        doc.setLineWidth(0.3);
+        doc.roundedRect(M, y, CW, 14, 2, 2, 'S');
+        doc.setTextColor(...PDF_COLORS.secondary);
+        doc.setFontSize(9); doc.setFont('helvetica', 'bold');
+        doc.text('#1 Priority Action:', M + 3, y + 5);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(...PDF_COLORS.dark);
+        const prioLines = doc.splitTextToSize(expert.priorityAction, CW - 8);
+        doc.text(prioLines, M + 3, y + 10);
+        y += 14 + (prioLines.length > 1 ? (prioLines.length - 1) * 4 : 0) + 4;
+
+        // Specific Fixes
+        if (expert.specificFixes && expert.specificFixes.length > 0) {
+          needPage(20);
+          doc.autoTable({
+            startY: y,
+            head: [['Timestamp', 'Issue', 'Recommended Fix']],
+            body: expert.specificFixes.map(f => [f.timestamp, f.issue, f.fix]),
+            theme: 'grid',
+            styles: { fontSize: 8, cellPadding: 3, lineColor: PDF_COLORS.tableBorder, overflow: 'linebreak' },
+            headStyles: { fillColor: PDF_COLORS.tableHeader, textColor: PDF_COLORS.white },
+            columnStyles: {
+              0: { cellWidth: 22, fontStyle: 'bold', textColor: PDF_COLORS.secondary },
+              1: { textColor: [180, 60, 60] },
+              2: { textColor: [30, 120, 70] },
+            },
+            margin: { left: M, right: M },
+          });
+          y = doc.lastAutoTable.finalY + 6;
+        }
+
+        y += 6;
+      });
+
+      // ===== SECTION 7: CRO TEST OPPORTUNITIES =====
+      const allTests = [];
+      ai.expertFeedback.forEach((expert, i) => {
+        if (expert.croTests) {
+          expert.croTests.forEach(t => allTests.push({ ...t, source: expert.expertName }));
+        }
+        const key = 'expert' + i;
+        if (generatedCROBatches[key]) {
+          generatedCROBatches[key].forEach(batch => {
+            batch.tests.forEach(t => allTests.push({ ...t, source: expert.expertName + ' (Generated)' }));
+          });
+        }
+      });
+
+      if (allTests.length > 0) {
+        doc.addPage(); y = M;
+
+        doc.setFillColor(...PDF_COLORS.emerald);
+        doc.rect(0, 0, PW, 14, 'F');
+        doc.setTextColor(...PDF_COLORS.white);
+        doc.setFontSize(16); doc.setFont('helvetica', 'bold');
+        doc.text('CRO Test Opportunities (' + allTests.length + ' tests)', M, 10);
+        y = 20;
+
+        doc.autoTable({
+          startY: y,
+          head: [['Test Name', 'Hypothesis', 'Control vs. Variant', 'Expected Impact', 'Source']],
+          body: allTests.map(t => [
+            t.testName,
+            t.hypothesis,
+            'Control: ' + t.control + '\nVariant: ' + t.variant,
+            t.expectedImpact,
+            t.source,
+          ]),
+          theme: 'grid',
+          styles: { fontSize: 8, cellPadding: 3, lineColor: PDF_COLORS.tableBorder, overflow: 'linebreak' },
+          headStyles: { fillColor: PDF_COLORS.emerald, textColor: PDF_COLORS.white, fontStyle: 'bold' },
+          columnStyles: {
+            0: { cellWidth: 28, fontStyle: 'bold' },
+            2: { cellWidth: 45 },
+            4: { cellWidth: 24, textColor: PDF_COLORS.secondary, fontStyle: 'italic' },
+          },
+          margin: { left: M, right: M },
+        });
+        y = doc.lastAutoTable.finalY + 10;
+      }
+
+      // ===== SECTION 8: DROP-OFF CONTENT ANALYSIS =====
+      if (ai.timestampAnalysis && ai.timestampAnalysis.length > 0) {
+        doc.addPage(); y = M;
+        sectionTitle('Drop-off Content Analysis');
+        doc.setFontSize(9); doc.setFont('helvetica', 'normal');
+        doc.setTextColor(...PDF_COLORS.textLight);
+        doc.text('What is happening in the video at each major drop-off point', M, y);
+        y += 6;
+
+        doc.autoTable({
+          startY: y,
+          head: [['Time', 'On Screen', 'Audio', 'Issue', 'Fix']],
+          body: ai.timestampAnalysis.map(ts => [
+            ts.formattedTime || ts.timestamp,
+            ts.contentDescription,
+            ts.audioDescription,
+            ts.issue,
+            ts.fix,
+          ]),
+          theme: 'grid',
+          styles: { fontSize: 8, cellPadding: 3, lineColor: PDF_COLORS.tableBorder, overflow: 'linebreak' },
+          headStyles: { fillColor: PDF_COLORS.tableHeader, textColor: PDF_COLORS.white, fontStyle: 'bold' },
+          columnStyles: {
+            0: { cellWidth: 16, fontStyle: 'bold', textColor: PDF_COLORS.secondary },
+            3: { textColor: [180, 60, 60] },
+            4: { textColor: [30, 120, 70] },
+          },
+          margin: { left: M, right: M },
+        });
+        y = doc.lastAutoTable.finalY + 10;
+      }
+
+      // ===== SECTION 9: SCRIPT STRUCTURE =====
+      if (ai.scriptStructure) {
+        needPage(40);
+        sectionTitle('Script Structure Analysis');
+
+        const ss = ai.scriptStructure;
+        const sections = [
+          ['Hook', ss.hook],
+          ['Problem', ss.problem],
+          ['Solution', ss.solution],
+          ['Proof', ss.proof],
+          ['CTA', ss.cta],
+        ].filter(([, text]) => text);
+
+        if (sections.length > 0) {
+          doc.autoTable({
+            startY: y,
+            head: [['Section', 'Analysis']],
+            body: sections,
+            theme: 'grid',
+            styles: { fontSize: 9, cellPadding: 4, lineColor: PDF_COLORS.tableBorder, overflow: 'linebreak' },
+            headStyles: { fillColor: PDF_COLORS.secondary, textColor: PDF_COLORS.white, fontStyle: 'bold' },
+            columnStyles: {
+              0: { cellWidth: 25, fontStyle: 'bold', textColor: PDF_COLORS.secondary },
+            },
+            margin: { left: M, right: M },
+          });
+          y = doc.lastAutoTable.finalY + 6;
+        }
+
+        if (ss.overallFlow) {
+          needPage(20);
+          subTitle('Overall Flow');
+          bodyText(ss.overallFlow, 2);
+        }
+      }
+
+    } // end AI sections
+
+    // ===== PAGE NUMBERS & FOOTER =====
+    const totalPages = doc.internal.getNumberOfPages();
+    for (let p = 1; p <= totalPages; p++) {
+      doc.setPage(p);
+      doc.setFontSize(8); doc.setFont('helvetica', 'normal');
+      doc.setTextColor(...PDF_COLORS.textLight);
+      doc.text('Vidalytics Analytics Report', M, PH - 8);
+      doc.text('Page ' + p + ' of ' + totalPages, PW - M, PH - 8, { align: 'right' });
+    }
+
+    // ===== SAVE =====
+    const filename = 'Video_Report_' + sanitizeFn(a.videoName) + '_' + new Date().toISOString().split('T')[0] + '.pdf';
+    doc.save(filename);
+
+  } catch (e) {
+    console.error('PDF generation error:', e);
+    alert('Error generating report: ' + e.message);
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'Download Client Report'; }
+  }
 }
 
 // ── Utilities ──
