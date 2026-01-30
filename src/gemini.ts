@@ -162,10 +162,18 @@ export class GeminiAnalyzer {
       // Non-fatal
     }
 
+    // Ensure each expert has their croTests array
+    const experts = Array.isArray(parsed.expertFeedback)
+      ? (parsed.expertFeedback as Array<Record<string, unknown>>).map((e) => ({
+          ...e,
+          croTests: Array.isArray(e.croTests) ? e.croTests : [],
+        }))
+      : [];
+
     return {
       videoId,
       analyzedAt: new Date().toISOString(),
-      expertFeedback: Array.isArray(parsed.expertFeedback) ? parsed.expertFeedback : [],
+      expertFeedback: experts,
       croTests: Array.isArray(parsed.croTests) ? parsed.croTests : [],
       timestampAnalysis: Array.isArray(parsed.timestampAnalysis) ? parsed.timestampAnalysis : [],
       scriptStructure: (parsed.scriptStructure as ContentAnalysis["scriptStructure"]) ?? {
@@ -252,17 +260,17 @@ Respond with a JSON object containing these exact fields:
           "fix": "Specific action to fix it"
         }
       ],
-      "priorityAction": "The single most impactful change this expert recommends"
-    }
-  ],
-  "croTests": [
-    {
-      "testName": "Name of the A/B test",
-      "hypothesis": "If we change X, then Y will happen because Z",
-      "control": "Current version description",
-      "variant": "What to change",
-      "expectedImpact": "Expected improvement in specific metric",
-      "implementation": "Step-by-step how to implement this test"
+      "priorityAction": "The single most impactful change this expert recommends",
+      "croTests": [
+        {
+          "testName": "Name of the A/B test unique to this expert's domain",
+          "hypothesis": "If we change X, then Y will happen because Z",
+          "control": "Current version description",
+          "variant": "What to change",
+          "expectedImpact": "Expected improvement in specific metric",
+          "implementation": "Step-by-step how to implement this test"
+        }
+      ]
     }
   ],
   "timestampAnalysis": [
@@ -289,7 +297,7 @@ Respond with a JSON object containing these exact fields:
 IMPORTANT:
 - For each drop-off point listed above, include a timestampAnalysis entry explaining what content at that moment is causing viewers to leave
 - Each expert should provide at least 2 specificFixes tied to actual timestamps in the video
-- Suggest 3-5 CRO tests that are actionable and specific to this video
+- Each expert MUST include 2-3 unique CRO tests in their "croTests" array, specific to their domain of expertise. Hormozi focuses on offer tests, Georgi on copy tests, Brunson on funnel/story tests, Kennedy on sales psychology tests, Schwartz on awareness/messaging tests. Every test must be different — no duplicate ideas across experts.
 - Be direct and specific. No generic advice. Reference actual content, words, and visuals from the video.
 - All timestamps should be in M:SS format`;
 }

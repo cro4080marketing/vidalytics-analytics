@@ -81,12 +81,23 @@ tr.selected { background: #1a2332; }
 .badge-poor { background: rgba(251,146,60,0.15); color: #fb923c; }
 .badge-critical { background: rgba(248,113,113,0.15); color: #f87171; }
 
-/* Detail panel */
-#detail-panel {
-  background: #141414; border: 1px solid #262626; border-radius: 12px;
-  padding: 24px; margin-bottom: 24px; display: none;
+/* Detail view (full-screen overlay) */
+#detail-view {
+  position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+  background: #0a0a0a; z-index: 1000; overflow-y: auto; display: none;
 }
-#detail-panel.visible { display: block; }
+#detail-view.visible { display: block; }
+.detail-inner { max-width: 1100px; margin: 0 auto; padding: 24px; }
+.detail-topbar {
+  display: flex; align-items: center; gap: 16px; margin-bottom: 24px;
+  padding-bottom: 16px; border-bottom: 1px solid #262626;
+}
+.back-btn {
+  background: #1a1a1a; border: 1px solid #333; border-radius: 8px;
+  color: #e5e5e5; padding: 8px 16px; font-size: 14px; cursor: pointer;
+  display: inline-flex; align-items: center; gap: 6px;
+}
+.back-btn:hover { background: #262626; color: #fff; }
 .detail-header { display: flex; align-items: center; gap: 16px; margin-bottom: 20px; flex-wrap: wrap; }
 .detail-title { color: #fff; font-size: 20px; font-weight: 600; }
 .detail-score { font-size: 32px; font-weight: 700; }
@@ -318,7 +329,9 @@ tr.selected { background: #1a2332; }
   <div id="summary-cards" class="cards hidden"></div>
   <div id="alerts" class="alerts hidden"></div>
   <div id="video-table" class="table-wrap hidden"></div>
-  <div id="detail-panel"></div>
+</div>
+<div id="detail-view">
+  <div class="detail-inner" id="detail-content"></div>
 </div>
 
 <script>
@@ -393,7 +406,6 @@ async function loadDashboard() {
   const btn = document.getElementById('btn-analyze');
 
   show('loading'); hide('error-box'); hide('summary-cards'); hide('alerts'); hide('video-table');
-  document.getElementById('detail-panel').classList.remove('visible');
   btn.disabled = true;
 
   try {
@@ -489,13 +501,24 @@ function sortBy(col) {
   renderTable(allVideos);
 }
 
-// ── Video Detail ──
+// ── Video Detail (full-screen view) ──
+function closeDetail() {
+  document.getElementById('detail-view').classList.remove('visible');
+  document.body.style.overflow = '';
+  selectedVideoId = null;
+  renderTable(allVideos);
+}
+
 async function selectVideo(id) {
   selectedVideoId = id;
   renderTable(allVideos);
-  const panel = document.getElementById('detail-panel');
-  panel.classList.add('visible');
-  panel.innerHTML = '<div class="loading"><div class="spinner"></div><div>Loading analysis...</div></div>';
+
+  const view = document.getElementById('detail-view');
+  const content = document.getElementById('detail-content');
+  view.classList.add('visible');
+  view.scrollTop = 0;
+  document.body.style.overflow = 'hidden';
+  content.innerHTML = '<div class="loading"><div class="spinner"></div><div>Loading analysis...</div></div>';
 
   const from = document.getElementById('date-from').value;
   const to = document.getElementById('date-to').value;
@@ -506,17 +529,18 @@ async function selectVideo(id) {
     if (data.error) throw new Error(data.error);
     renderDetail(data);
   } catch (err) {
-    panel.innerHTML = `<div class="error-msg">${esc(err.message)}</div>`;
+    content.innerHTML = `<div class="detail-topbar"><button class="back-btn" onclick="closeDetail()">← Back to Dashboard</button></div><div class="error-msg">${esc(err.message)}</div>`;
   }
 }
 
 function renderDetail(data) {
   const { analysis, dropOff, stats } = data;
   const a = analysis;
-  const panel = document.getElementById('detail-panel');
+  const content = document.getElementById('detail-content');
 
-  panel.innerHTML = `
-    <div class="detail-header">
+  content.innerHTML = `
+    <div class="detail-topbar">
+      <button class="back-btn" onclick="closeDetail()">← Back to Dashboard</button>
       <div class="detail-score badge badge-${a.overallRating}">${a.overallScore}/100</div>
       <div class="detail-title">${esc(a.videoName)}</div>
     </div>
@@ -656,22 +680,7 @@ function renderAIAnalysis(data, container) {
         `).join('')}
       </div>` : ''}
 
-      <!-- CRO Tests -->
-      ${a.croTests.length > 0 ? `
-      <div class="cro-section">
-        <h3>CRO Test Suggestions</h3>
-        <p style="color:#888;font-size:13px;margin-bottom:12px;">A/B tests to improve video performance</p>
-        ${a.croTests.map(t => `
-          <div class="cro-card">
-            <div class="cro-name">${esc(t.testName)}</div>
-            <div class="cro-row"><span class="cro-label">Hypothesis</span><span class="cro-value">${esc(t.hypothesis)}</span></div>
-            <div class="cro-row"><span class="cro-label">Control</span><span class="cro-value">${esc(t.control)}</span></div>
-            <div class="cro-row"><span class="cro-label">Variant</span><span class="cro-value">${esc(t.variant)}</span></div>
-            <div class="cro-row"><span class="cro-label">Impact</span><span class="cro-value">${esc(t.expectedImpact)}</span></div>
-            <div class="cro-row"><span class="cro-label">How To</span><span class="cro-value">${esc(t.implementation)}</span></div>
-          </div>
-        `).join('')}
-      </div>` : ''}
+      <!-- CRO Tests are now inside each expert tab -->
 
       <!-- Script Structure -->
       ${a.scriptStructure ? `
@@ -732,6 +741,21 @@ function renderExpertPanel(expert, index) {
         <h4>#1 Priority Action</h4>
         <p>${esc(expert.priorityAction)}</p>
       </div>
+
+      ${(expert.croTests && expert.croTests.length > 0) ? `
+      <div class="cro-section" style="margin-top:16px;">
+        <h4 style="color:#7c3aed;font-size:13px;margin-bottom:8px;">CRO Tests from ${esc(expert.expertName)}</h4>
+        ${expert.croTests.map(t => `
+          <div class="cro-card">
+            <div class="cro-name">${esc(t.testName)}</div>
+            <div class="cro-row"><span class="cro-label">Hypothesis</span><span class="cro-value">${esc(t.hypothesis)}</span></div>
+            <div class="cro-row"><span class="cro-label">Control</span><span class="cro-value">${esc(t.control)}</span></div>
+            <div class="cro-row"><span class="cro-label">Variant</span><span class="cro-value">${esc(t.variant)}</span></div>
+            <div class="cro-row"><span class="cro-label">Impact</span><span class="cro-value">${esc(t.expectedImpact)}</span></div>
+            <div class="cro-row"><span class="cro-label">How To</span><span class="cro-value">${esc(t.implementation)}</span></div>
+          </div>
+        `).join('')}
+      </div>` : ''}
     </div>
   `;
 }

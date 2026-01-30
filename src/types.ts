@@ -194,6 +194,7 @@ export interface ExpertFeedback {
     fix: string;
   }>;
   priorityAction: string;
+  croTests: CROTest[];
 }
 
 export interface CROTest {
