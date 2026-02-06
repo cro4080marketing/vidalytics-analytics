@@ -690,8 +690,11 @@ function fmt(d) {
 
 // Get affiliate filter query param (if set)
 function getAffiliateParam() {
-  const val = (document.getElementById('affiliate-filter')?.value || '').trim();
-  return val ? `&affId=${encodeURIComponent(val)}` : '';
+  const el = document.getElementById('affiliate-filter');
+  const val = (el?.value || '').trim();
+  const param = val ? `&affId=${encodeURIComponent(val)}` : '';
+  if (val) console.log('[Affiliate Filter] Filtering by:', val);
+  return param;
 }
 
 // Get current affiliate ID for display
@@ -1123,26 +1126,33 @@ async function loadAIAnalysis(videoId) {
 async function loadDashboard() {
   const from = document.getElementById('date-from').value;
   const to = document.getElementById('date-to').value;
+  const affiliateParam = getAffiliateParam();
   const btn = document.getElementById('btn-analyze');
 
   show('loading'); hide('error-box'); hide('summary-cards'); hide('alerts'); hide('video-table');
   btn.disabled = true;
 
   try {
-    const [videosRes, summaryRes] = await Promise.all([
-      fetch(`/api/videos?from=${from}&to=${to}`).then(r => r.json()),
-      fetch(`/api/summary?from=${from}&to=${to}`).then(r => r.json()),
-    ]);
-
+    // When filtering by affiliate, only fetch videos (summary doesn't support filtering)
+    const videosRes = await fetch(`/api/videos?from=${from}&to=${to}${affiliateParam}`).then(r => r.json());
     if (videosRes.error) throw new Error(videosRes.error);
-    if (summaryRes.error) throw new Error(summaryRes.error);
 
     allVideos = videosRes.videos;
-    renderSummary(summaryRes.summary);
-    renderAlerts(summaryRes.summary);
+
+    // If filtering by affiliate, show filtered summary instead of fetching from API
+    if (videosRes.affiliateFilter) {
+      renderFilteredSummary(allVideos, videosRes.affiliateFilter);
+      hide('alerts'); // Hide alerts when filtering
+    } else {
+      const summaryRes = await fetch(`/api/summary?from=${from}&to=${to}`).then(r => r.json());
+      if (summaryRes.error) throw new Error(summaryRes.error);
+      renderSummary(summaryRes.summary);
+      renderAlerts(summaryRes.summary);
+      if (summaryRes.summary.portfolioRecommendations.length > 0) show('alerts');
+    }
+
     renderTable(allVideos);
     show('summary-cards'); show('video-table');
-    if (summaryRes.summary.portfolioRecommendations.length > 0) show('alerts');
   } catch (err) {
     document.getElementById('error-box').textContent = err.message;
     show('error-box');
@@ -1160,6 +1170,39 @@ function renderSummary(s) {
     <div class="card"><div class="card-label">Avg Engagement</div><div class="card-value">${(s.avgEngagement*100).toFixed(1)}%</div><div class="card-sub">of video watched</div></div>
     <div class="card"><div class="card-label">Avg Play Rate</div><div class="card-value">${(s.avgPlayRate*100).toFixed(1)}%</div><div class="card-sub">visitors who press play</div></div>
     <div class="card"><div class="card-label">Revenue</div><div class="card-value">$${s.totalRevenue.toFixed(2)}</div><div class="card-sub">${s.totalConversions} conversions</div></div>
+  `;
+}
+
+// Render summary from filtered video stats (when affiliate filter is active)
+function renderFilteredSummary(videos, affiliateId) {
+  let totalPlays = 0;
+  let totalImpressions = 0;
+  let totalConversions = 0;
+  let totalRevenue = 0;
+  let videosWithStats = 0;
+
+  for (const v of videos) {
+    if (v.stats) {
+      totalPlays += v.stats.plays || 0;
+      totalImpressions += v.stats.impressions || 0;
+      totalConversions += v.stats.conversionCount || 0;
+      totalRevenue += v.stats.revenue || 0;
+      if (v.stats.plays > 0) videosWithStats++;
+    }
+  }
+
+  const avgPlayRate = totalImpressions > 0 ? totalPlays / totalImpressions : 0;
+  const avgConvRate = totalPlays > 0 ? totalConversions / totalPlays : 0;
+
+  document.getElementById('summary-cards').innerHTML = `
+    <div class="card" style="border-color:#7c3aed;">
+      <div class="card-label" style="color:#a78bfa;">Affiliate: ${esc(affiliateId)}</div>
+      <div class="card-value">${totalPlays.toLocaleString()}</div>
+      <div class="card-sub">plays from this affiliate</div>
+    </div>
+    <div class="card"><div class="card-label">Videos with Plays</div><div class="card-value">${videosWithStats}</div><div class="card-sub">of ${videos.length} total videos</div></div>
+    <div class="card"><div class="card-label">Avg Play Rate</div><div class="card-value">${(avgPlayRate*100).toFixed(1)}%</div><div class="card-sub">visitors who press play</div></div>
+    <div class="card"><div class="card-label">Revenue</div><div class="card-value">$${totalRevenue.toFixed(2)}</div><div class="card-sub">${totalConversions} conversions</div></div>
   `;
 }
 

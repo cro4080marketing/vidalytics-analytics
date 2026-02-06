@@ -47,13 +47,15 @@ app.get("/api/videos", async (req, res) => {
   try {
     const dateFrom = (req.query.from as string) || defaultDateFrom();
     const dateTo = (req.query.to as string) || defaultDateTo();
+    const filters = parseUrlParamFilters(req.query as Record<string, unknown>);
 
     const videos = await client.listVideos();
 
     // Fetch stats in batches of 5 with 500ms delay to avoid rate limits
+    // Pass filters to use timeline endpoint when affiliate filtering is active
     const allStats = await fetchInBatches(
       videos.map((v) => () =>
-        client.getVideoStats(v.id, dateFrom, dateTo).catch(() => null)
+        client.getVideoStats(v.id, dateFrom, dateTo, filters).catch(() => null)
       ),
       5,
       500
@@ -73,7 +75,9 @@ app.get("/api/videos", async (req, res) => {
     // Sort by score descending
     results.sort((a, b) => b.score - a.score);
 
-    res.json({ videos: results, dateFrom, dateTo });
+    // Include filter info in response
+    const affiliateFilter = filters?.urlParam ? Object.values(filters.urlParam)[0] : null;
+    res.json({ videos: results, dateFrom, dateTo, affiliateFilter });
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
     res.status(500).json({ error: msg });
