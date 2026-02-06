@@ -698,5 +698,7 @@ function parseUrlParamFilters(query: Record<string, unknown>): { urlParam?: Reco
     urlParams["affId"] = query.affId.trim();
   }
 
-  return Object.keys(urlParams).length > 0 ? { urlParam: urlParams } : undefined;
+  const result = Object.keys(urlParams).length > 0 ? { urlParam: urlParams } : undefined;
+  console.log(`[Filter Debug] Query:`, query, `→ Filters:`, result);
+  return result;
 }

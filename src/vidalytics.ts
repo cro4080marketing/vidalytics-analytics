@@ -39,6 +39,8 @@ export class VidalyticsClient {
       }
     }
 
+    console.log(`[Vidalytics API] ${url.toString()}`);
+
     const res = await fetch(url.toString(), {
       headers: {
         Accept: "application/json",
