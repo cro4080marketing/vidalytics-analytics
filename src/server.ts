@@ -677,28 +677,26 @@ function defaultDateTo(): string {
   return new Date().toISOString().split("T")[0];
 }
 
-/** Parse URL parameter filters from query string (e.g., ?urlParam[affId]=123) */
+/** Parse URL parameter filters from query string (e.g., ?affId=123) */
 function parseUrlParamFilters(query: Record<string, unknown>): { urlParam?: Record<string, string> } | undefined {
   const urlParams: Record<string, string> = {};
 
-  for (const [key, value] of Object.entries(query)) {
-    // Match urlParam[paramName] pattern
-    const match = key.match(/^urlParam\[(.+)\]$/);
-    if (match && typeof value === "string" && value.trim()) {
-      urlParams[match[1]] = value.trim();
-    }
-  }
-
-  // Also support simple ?affiliate=xxx shorthand
+  // Support ?affiliate=xxx shorthand
   if (typeof query.affiliate === "string" && query.affiliate.trim()) {
     urlParams["affiliate"] = query.affiliate.trim();
   }
-  // Support ?affId=xxx shorthand
+  // Support ?affId=xxx shorthand (common for affiliate tracking)
   if (typeof query.affId === "string" && query.affId.trim()) {
     urlParams["affId"] = query.affId.trim();
   }
+  // Support ?hop=xxx (ClickBank)
+  if (typeof query.hop === "string" && query.hop.trim()) {
+    urlParams["hop"] = query.hop.trim();
+  }
 
   const result = Object.keys(urlParams).length > 0 ? { urlParam: urlParams } : undefined;
-  console.log(`[Filter Debug] Query:`, query, `→ Filters:`, result);
+  if (result) {
+    console.log(`[Affiliate Filter] Filtering by:`, result.urlParam);
+  }
   return result;
 }

@@ -113,15 +113,13 @@ export class VidalyticsClient {
     dateTo: string,
     filters?: { urlParam?: Record<string, string> }
   ): Promise<VideoStats> {
-    const params: Record<string, string> = { dateFrom, dateTo };
-
-    // Add URL parameter filters (e.g., affiliate ID)
-    if (filters?.urlParam) {
-      for (const [key, value] of Object.entries(filters.urlParam)) {
-        params[`urlParam[${key}]`] = value;
-      }
+    // If filters are provided, use the timeline endpoint which supports filtering
+    if (filters?.urlParam && Object.keys(filters.urlParam).length > 0) {
+      return this.getVideoStatsFiltered(videoId, dateFrom, dateTo, filters);
     }
 
+    // No filters - use the regular stats endpoint
+    const params: Record<string, string> = { dateFrom, dateTo };
     const raw = await this.request<RawVideoStats>(`/stats/video/${videoId}`, params);
     return {
       videoId,
@@ -140,6 +138,97 @@ export class VidalyticsClient {
       unmuteCount: raw.unmuteCount,
       pgOptInRate: raw.pgOptInRate,
       pgEventsCount: raw.pgEventsCount,
+    };
+  }
+
+  /**
+   * Get video stats with URL parameter filtering using the timeline endpoint.
+   * The timeline endpoint is the only one that supports filter.url_params.{param}
+   */
+  private async getVideoStatsFiltered(
+    videoId: string,
+    dateFrom: string,
+    dateTo: string,
+    filters: { urlParam?: Record<string, string> }
+  ): Promise<VideoStats> {
+    const params: Record<string, string> = {
+      videoGuids: videoId,
+      metrics: "plays,impressions,conversions,revenue", // Available metrics in timeline endpoint
+      dateFrom,
+      dateTo,
+    };
+
+    // Add URL parameter filters using the correct format: filter.url_params.{paramName}=value
+    if (filters.urlParam) {
+      for (const [key, value] of Object.entries(filters.urlParam)) {
+        params[`filter.url_params.${key}`] = value;
+      }
+    }
+
+    console.log(`[Vidalytics] Using timeline endpoint with filters:`, params);
+
+    interface TimelineResponse {
+      data: Array<{
+        segment: string;
+        data: Array<{
+          date: string;
+          data: Array<{
+            videoGuid: string;
+            metrics: {
+              plays?: number;
+              impressions?: number;
+              conversions?: number;
+              revenue?: number;
+              engagement?: number;
+              unmutes?: number;
+            };
+          }>;
+        }>;
+      }>;
+    }
+
+    const raw = await this.request<TimelineResponse>(`/stats/videos/timeline`, params, { skipCache: true });
+
+    // Aggregate timeline data into totals
+    let totalPlays = 0;
+    let totalImpressions = 0;
+    let totalConversions = 0;
+    let totalRevenue = 0;
+
+    for (const segment of raw.data || []) {
+      for (const dayData of segment.data || []) {
+        for (const videoData of dayData.data || []) {
+          if (videoData.videoGuid === videoId) {
+            const m = videoData.metrics;
+            totalPlays += m.plays || 0;
+            totalImpressions += m.impressions || 0;
+            totalConversions += m.conversions || 0;
+            totalRevenue += m.revenue || 0;
+          }
+        }
+      }
+    }
+
+    const playRate = totalImpressions > 0 ? totalPlays / totalImpressions : 0;
+    const conversionRate = totalPlays > 0 ? totalConversions / totalPlays : 0;
+
+    return {
+      videoId,
+      plays: totalPlays,
+      playsUnique: totalPlays, // Timeline doesn't provide unique plays
+      playRate,
+      uniquePlayRate: playRate,
+      engagement: 0, // Not available in timeline endpoint
+      impressions: totalImpressions,
+      conversionCount: totalConversions,
+      conversionRate,
+      revenue: totalRevenue,
+      revenueAverage: totalConversions > 0 ? totalRevenue / totalConversions : 0,
+      revenuePerViewer: totalPlays > 0 ? totalRevenue / totalPlays : 0,
+      unmuteRate: 0, // Not available in timeline endpoint
+      unmuteCount: 0,
+      pgOptInRate: 0,
+      pgEventsCount: 0,
     };
   }
 
