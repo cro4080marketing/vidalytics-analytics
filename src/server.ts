@@ -86,11 +86,12 @@ app.get("/api/videos/:id/analysis", async (req, res) => {
     const videoId = req.params.id;
     const dateFrom = (req.query.from as string) || defaultDateFrom();
     const dateTo = (req.query.to as string) || defaultDateTo();
+    const filters = parseUrlParamFilters(req.query as Record<string, unknown>);
 
     const [videos, stats, dropOff] = await Promise.all([
       client.listVideos(),
-      client.getVideoStats(videoId, dateFrom, dateTo),
-      client.getDropOff(videoId, dateFrom, dateTo),
+      client.getVideoStats(videoId, dateFrom, dateTo, filters),
+      client.getDropOff(videoId, dateFrom, dateTo, filters),
     ]);
 
     const video = videos.find((v) => v.id === videoId);
@@ -189,13 +190,14 @@ app.get("/api/videos/:id/content-analysis", async (req, res) => {
       const videoId = req.params.id;
       const dateFrom = (req.query.from as string) || defaultDateFrom();
       const dateTo = (req.query.to as string) || defaultDateTo();
+      const filters = parseUrlParamFilters(req.query as Record<string, unknown>);
 
       sendEvent("progress", { step: 0, totalSteps: 6, label: "Loading video data", detail: "Fetching stats and drop-off data..." });
 
       const [videos, stats, dropOff] = await Promise.all([
         client.listVideos(),
-        client.getVideoStats(videoId, dateFrom, dateTo),
-        client.getDropOff(videoId, dateFrom, dateTo),
+        client.getVideoStats(videoId, dateFrom, dateTo, filters),
+        client.getDropOff(videoId, dateFrom, dateTo, filters),
       ]);
 
       const video = videos.find((v) => v.id === videoId);
@@ -226,11 +228,12 @@ app.get("/api/videos/:id/content-analysis", async (req, res) => {
       const videoId = req.params.id;
       const dateFrom = (req.query.from as string) || defaultDateFrom();
       const dateTo = (req.query.to as string) || defaultDateTo();
+      const filters = parseUrlParamFilters(req.query as Record<string, unknown>);
 
       const [videos, stats, dropOff] = await Promise.all([
         client.listVideos(),
-        client.getVideoStats(videoId, dateFrom, dateTo),
-        client.getDropOff(videoId, dateFrom, dateTo),
+        client.getVideoStats(videoId, dateFrom, dateTo, filters),
+        client.getDropOff(videoId, dateFrom, dateTo, filters),
       ]);
 
       const video = videos.find((v) => v.id === videoId);
@@ -672,4 +675,28 @@ function defaultDateFrom(): string {
 
 function defaultDateTo(): string {
   return new Date().toISOString().split("T")[0];
+}
+
+/** Parse URL parameter filters from query string (e.g., ?urlParam[affId]=123) */
+function parseUrlParamFilters(query: Record<string, unknown>): { urlParam?: Record<string, string> } | undefined {
+  const urlParams: Record<string, string> = {};
+
+  for (const [key, value] of Object.entries(query)) {
+    // Match urlParam[paramName] pattern
+    const match = key.match(/^urlParam\[(.+)\]$/);
+    if (match && typeof value === "string" && value.trim()) {
+      urlParams[match[1]] = value.trim();
+    }
+  }
+
+  // Also support simple ?affiliate=xxx shorthand
+  if (typeof query.affiliate === "string" && query.affiliate.trim()) {
+    urlParams["affiliate"] = query.affiliate.trim();
+  }
+  // Support ?affId=xxx shorthand
+  if (typeof query.affId === "string" && query.affId.trim()) {
+    urlParams["affId"] = query.affId.trim();
+  }
+
+  return Object.keys(urlParams).length > 0 ? { urlParam: urlParams } : undefined;
 }

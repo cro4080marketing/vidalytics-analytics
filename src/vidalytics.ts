@@ -108,12 +108,19 @@ export class VidalyticsClient {
   async getVideoStats(
     videoId: string,
     dateFrom: string,
-    dateTo: string
+    dateTo: string,
+    filters?: { urlParam?: Record<string, string> }
   ): Promise<VideoStats> {
-    const raw = await this.request<RawVideoStats>(`/stats/video/${videoId}`, {
-      dateFrom,
-      dateTo,
-    });
+    const params: Record<string, string> = { dateFrom, dateTo };
+
+    // Add URL parameter filters (e.g., affiliate ID)
+    if (filters?.urlParam) {
+      for (const [key, value] of Object.entries(filters.urlParam)) {
+        params[`urlParam[${key}]`] = value;
+      }
+    }
+
+    const raw = await this.request<RawVideoStats>(`/stats/video/${videoId}`, params);
     return {
       videoId,
       plays: raw.plays,
@@ -137,12 +144,19 @@ export class VidalyticsClient {
   async getDropOff(
     videoId: string,
     dateFrom: string,
-    dateTo: string
+    dateTo: string,
+    filters?: { urlParam?: Record<string, string> }
   ): Promise<DropOffData> {
-    const raw = await this.request<RawDropOff>(`/stats/video/${videoId}/drop-off`, {
-      dateFrom,
-      dateTo,
-    });
+    const params: Record<string, string> = { dateFrom, dateTo };
+
+    // Add URL parameter filters (e.g., affiliate ID)
+    if (filters?.urlParam) {
+      for (const [key, value] of Object.entries(filters.urlParam)) {
+        params[`urlParam[${key}]`] = value;
+      }
+    }
+
+    const raw = await this.request<RawDropOff>(`/stats/video/${videoId}/drop-off`, params);
 
     const watches = raw.all.watches;
     const seconds = Object.keys(watches)

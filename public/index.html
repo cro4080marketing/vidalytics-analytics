@@ -632,6 +632,10 @@ tr.selected { background: #1a2332; }
     <input type="date" id="date-from" />
     <label style="color:#888;font-size:13px;">To</label>
     <input type="date" id="date-to" />
+    <div class="affiliate-filter">
+      <label style="color:#888;font-size:13px;">Affiliate ID</label>
+      <input type="text" id="affiliate-filter" placeholder="e.g. 15F62B53" style="background:#141414;border:1px solid #333;border-radius:8px;color:#e5e5e5;padding:8px 12px;font-size:14px;width:140px;" />
+    </div>
     <button id="btn-analyze" onclick="loadDashboard()">Analyze</button>
     <button class="compare-btn" id="btn-compare" onclick="toggleComparisonMode()">Compare Videos</button>
   </div>
@@ -682,6 +686,17 @@ let selectedForComparison = []; // max 2 video IDs
 
 function fmt(d) {
   return d.toISOString().split('T')[0];
+}
+
+// Get affiliate filter query param (if set)
+function getAffiliateParam() {
+  const val = (document.getElementById('affiliate-filter')?.value || '').trim();
+  return val ? `&affId=${encodeURIComponent(val)}` : '';
+}
+
+// Get current affiliate ID for display
+function getCurrentAffiliateId() {
+  return (document.getElementById('affiliate-filter')?.value || '').trim();
 }
 
 async function loadUsage() {
@@ -1065,7 +1080,7 @@ async function loadAIAnalysis(videoId) {
     saveVideoContext(videoId);
 
     // Use SSE for real-time progress
-    const url = `/api/videos/${videoId}/content-analysis?from=${from}&to=${to}&stream=1${encodeContext()}`;
+    const url = `/api/videos/${videoId}/content-analysis?from=${from}&to=${to}&stream=1${encodeContext()}${getAffiliateParam()}`;
     const eventSource = new EventSource(url);
 
     await new Promise((resolve, reject) => {
@@ -1234,7 +1249,7 @@ async function selectVideo(id) {
   const to = document.getElementById('date-to').value;
 
   try {
-    const res = await fetch(`/api/videos/${id}/analysis?from=${from}&to=${to}`);
+    const res = await fetch(`/api/videos/${id}/analysis?from=${from}&to=${to}${getAffiliateParam()}`);
     const data = await res.json();
     if (data.error) throw new Error(data.error);
     renderDetail(data);
@@ -1249,11 +1264,14 @@ function renderDetail(data) {
   const a = analysis;
   const content = document.getElementById('detail-content');
 
+  const affiliateId = getCurrentAffiliateId();
+  const affiliateBadge = affiliateId ? `<span class="badge" style="background:rgba(124,58,237,0.15);color:#a78bfa;margin-left:8px;">Affiliate: ${esc(affiliateId)}</span>` : '';
+
   content.innerHTML = `
     <div class="detail-topbar">
       <button class="back-btn" onclick="closeDetail()">← Back to Dashboard</button>
       <div class="detail-score badge badge-${a.overallRating}">${a.overallScore}/100</div>
-      <div class="detail-title">${esc(a.videoName)}</div>
+      <div class="detail-title">${esc(a.videoName)}${affiliateBadge}</div>
       <button class="report-btn" onclick="generateReport()" id="report-download-btn">Download Client Report</button>
     </div>
 
